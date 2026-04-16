@@ -11,7 +11,6 @@ pub fn BodyMetrics() -> impl IntoView {
     let add_act  = ServerAction::<AddBodyMetric>::new();
     let del_act  = ServerAction::<DeleteBodyMetric>::new();
 
-    // Refresh the list after add / delete
     Effect::new(move |_| {
         if add_act.value().with(|v| matches!(v, Some(Ok(_)))) {
             metrics.refetch();
@@ -23,13 +22,14 @@ pub fn BodyMetrics() -> impl IntoView {
         }
     });
 
+    let (weight_unit, set_weight_unit) = signal("kg".to_string());
+
     view! {
         <div class="page body-metrics">
             <div class="page-header">
                 <h1>"Body Metrics"</h1>
             </div>
 
-            // Add form
             <div class="card">
                 <h2>"Log entry"</h2>
                 {move || add_act.value().get().and_then(|r| r.err()).map(|e| view! {
@@ -37,12 +37,15 @@ pub fn BodyMetrics() -> impl IntoView {
                 })}
                 <div class="form form-inline">
                     <ActionForm action=add_act>
+                        // Weight value
                         <div class="form-group">
-                            <label class="form-label" for="weight_kg">"Weight (kg)"</label>
+                            <label class="form-label" for="weight">
+                                "Weight (" {move || weight_unit.get()} ")"
+                            </label>
                             <input
                                 type="number"
-                                id="weight_kg"
-                                name="weight_kg"
+                                id="weight"
+                                name="weight"
                                 min="0"
                                 step="0.1"
                                 placeholder="75.0"
@@ -50,6 +53,24 @@ pub fn BodyMetrics() -> impl IntoView {
                                 class="input"
                             />
                         </div>
+                        // Weight unit
+                        <div class="form-group">
+                            <label class="form-label">"Unit"</label>
+                            <div class="btn-group">
+                                <button
+                                    type="button"
+                                    class=move || if weight_unit.get() == "kg" { "btn btn-selected" } else { "btn" }
+                                    on:click=move |_| set_weight_unit.set("kg".into())
+                                >"kg"</button>
+                                <button
+                                    type="button"
+                                    class=move || if weight_unit.get() == "lb" { "btn btn-selected" } else { "btn" }
+                                    on:click=move |_| set_weight_unit.set("lb".into())
+                                >"lb"</button>
+                            </div>
+                            <input type="hidden" name="weight_unit" value=move || weight_unit.get()/>
+                        </div>
+                        // Notes
                         <div class="form-group">
                             <label class="form-label" for="notes">"Notes (optional)"</label>
                             <input
@@ -67,7 +88,6 @@ pub fn BodyMetrics() -> impl IntoView {
                 </div>
             </div>
 
-            // Metric list
             <Suspense fallback=|| view! { <div class="loading">"Loading…"</div> }>
                 {move || {
                     metrics.get().map(|result| match result {
@@ -82,7 +102,7 @@ pub fn BodyMetrics() -> impl IntoView {
                                 <thead>
                                     <tr>
                                         <th>"Date"</th>
-                                        <th>"Weight (kg)"</th>
+                                        <th>"Weight"</th>
                                         <th>"Notes"</th>
                                         <th></th>
                                     </tr>
@@ -96,10 +116,11 @@ pub fn BodyMetrics() -> impl IntoView {
                                             move |m| {
                                                 let metric_id = m.id;
                                                 let date = m.recorded_at.get(..16).unwrap_or(&m.recorded_at).replace('T', " ").to_string();
+                                                let weight_display = format!("{:.1} {}", m.weight, m.weight_unit);
                                                 view! {
                                                     <tr>
                                                         <td>{date}</td>
-                                                        <td>{format!("{:.1}", m.weight_kg)}</td>
+                                                        <td>{weight_display}</td>
                                                         <td>{m.notes.clone().unwrap_or_default()}</td>
                                                         <td>
                                                             <button

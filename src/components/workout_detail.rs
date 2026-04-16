@@ -52,7 +52,7 @@ pub fn WorkoutDetail() -> impl IntoView {
                                 }
                             }
 
-                            let title = format!("Workout {} — {}", session.workout_type,
+                            let title = format!("{} — {}", session.workout_name,
                                 session.created_at.get(..16).unwrap_or(&session.created_at).replace('T', " "));
 
                             view! {
@@ -80,7 +80,8 @@ pub fn WorkoutDetail() -> impl IntoView {
                                                         .cloned()
                                                         .collect();
                                                     let weight = ex_sets.first().map(|s| s.weight).unwrap_or(0.0);
-                                                    let title = format!("{} — {:.1} kg", exercise_name, weight);
+                                                    let unit = ex_sets.first().map(|s| s.weight_unit.clone()).unwrap_or_else(|| "kg".to_string());
+                                                    let title = format!("{} — {:.1} {}", exercise_name, weight, unit);
                                                     view! {
                                                         <div class="exercise-block">
                                                             <h3>{title}</h3>

@@ -32,9 +32,9 @@ pub fn WorkoutList() -> impl IntoView {
                                     key=|s| s.id
                                     children=move |s| {
                                         let href = format!("/workouts/{}", s.id);
-                                        let label = format!("Workout {}", s.workout_type);
+                                        let label = s.workout_name.clone();
                                         let date = format_date(&s.created_at);
-                                        let badge = format!("badge badge-{}", s.workout_type.to_lowercase());
+                                        let badge = "badge".to_string();
                                         let notes = s.notes.clone();
                                         view! {
                                             <a href=href class="session-card">

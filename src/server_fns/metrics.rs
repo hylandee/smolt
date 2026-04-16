@@ -10,7 +10,7 @@ pub async fn get_body_metrics() -> Result<Vec<BodyMetric>, ServerFnError> {
         .ok_or_else(|| ServerFnError::new("DB pool not in context"))?;
 
     let rows = sqlx::query_as::<_, BodyMetric>(
-        "SELECT id, recorded_at, weight_kg, notes \
+        "SELECT id, recorded_at, weight, weight_unit, notes \
          FROM body_metrics \
          ORDER BY recorded_at DESC \
          LIMIT 200",
@@ -26,15 +26,18 @@ pub async fn get_body_metrics() -> Result<Vec<BodyMetric>, ServerFnError> {
 
 #[server]
 pub async fn add_body_metric(
-    weight_kg: f64,
-    notes:     String,
+    weight:      f64,
+    weight_unit: String,
+    notes:       String,
 ) -> Result<i64, ServerFnError> {
     let pool = use_context::<sqlx::SqlitePool>()
         .ok_or_else(|| ServerFnError::new("DB pool not in context"))?;
 
-    if weight_kg <= 0.0 {
-        return Err(ServerFnError::new("weight_kg must be positive"));
+    if weight <= 0.0 {
+        return Err(ServerFnError::new("weight must be positive"));
     }
+
+    let unit = if weight_unit.trim().eq_ignore_ascii_case("lb") { "lb" } else { "kg" };
 
     let notes_opt: Option<String> = if notes.trim().is_empty() {
         None
@@ -43,9 +46,10 @@ pub async fn add_body_metric(
     };
 
     let id: i64 = sqlx::query_scalar(
-        "INSERT INTO body_metrics (weight_kg, notes) VALUES (?, ?) RETURNING id",
+        "INSERT INTO body_metrics (weight, weight_unit, notes) VALUES (?, ?, ?) RETURNING id",
     )
-    .bind(weight_kg)
+    .bind(weight)
+    .bind(unit)
     .bind(notes_opt)
     .fetch_one(&pool)
     .await
@@ -73,12 +77,12 @@ pub async fn delete_body_metric(metric_id: i64) -> Result<(), ServerFnError> {
 // ── Bodyweight history for the progress chart ─────────────────────────────────
 
 #[server]
-pub async fn get_bodyweight_history() -> Result<Vec<(String, f64)>, ServerFnError> {
+pub async fn get_bodyweight_history() -> Result<Vec<(String, f64, String)>, ServerFnError> {
     let pool = use_context::<sqlx::SqlitePool>()
         .ok_or_else(|| ServerFnError::new("DB pool not in context"))?;
 
-    let rows: Vec<(String, f64)> = sqlx::query_as(
-        "SELECT recorded_at, weight_kg \
+    let rows: Vec<(String, f64, String)> = sqlx::query_as(
+        "SELECT recorded_at, weight, weight_unit \
          FROM body_metrics \
          ORDER BY recorded_at ASC \
          LIMIT 200",

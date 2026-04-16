@@ -1,25 +1,29 @@
 use leptos::form::ActionForm;
 use leptos::prelude::*;
 
-use crate::models::workout_exercises;
+use crate::models::{built_in_templates, workout_exercises};
 use crate::server_fns::StartWorkout;
 
 #[component]
 pub fn NewWorkout() -> impl IntoView {
-    // Track selected workout type so we can show the right exercise labels.
-    let (wtype, set_wtype) = signal("A".to_string());
+    let templates = built_in_templates();
+    let first_template = templates.first().map(|t| t.name.to_string()).unwrap_or_default();
+
+    // Selected template / workout name (user can type anything)
+    let (workout_name, set_workout_name) = signal(first_template);
+    let (weight_unit, set_weight_unit) = signal("kg".to_string());
 
     let action   = ServerAction::<StartWorkout>::new();
     let navigate = leptos_router::hooks::use_navigate();
 
-    // After the server action completes successfully, redirect to the detail page.
     Effect::new(move |_| {
         if let Some(Ok(id)) = action.value().get() {
             navigate(&format!("/workouts/{}", id), Default::default());
         }
     });
 
-    let exercises = move || workout_exercises(&wtype.get());
+    // Exercises from the selected built-in template (empty for custom names)
+    let exercises = move || workout_exercises(&workout_name.get());
 
     view! {
         <div class="page new-workout">
@@ -33,53 +37,113 @@ pub fn NewWorkout() -> impl IntoView {
 
             <div class="form">
                 <ActionForm action=action>
-                    // Workout type toggle
+                    // ── Workout name ──────────────────────────────────────────
                     <div class="form-group">
-                        <label class="form-label">"Workout type"</label>
+                        <label class="form-label">"Workout name"</label>
+                        // Quick-select built-in templates
+                        <div class="btn-group">
+                            {
+                                let templates = built_in_templates();
+                                templates.into_iter().map(|t| {
+                                    let name = t.name.to_string();
+                                    let name2 = name.clone();
+                                    view! {
+                                        <button
+                                            type="button"
+                                            class=move || {
+                                                if workout_name.get() == name { "btn btn-selected" } else { "btn" }
+                                            }
+                                            on:click={
+                                                let name2 = name2.clone();
+                                                move |_| set_workout_name.set(name2.clone())
+                                            }
+                                        >{t.name}</button>
+                                    }
+                                }).collect_view()
+                            }
+                        </div>
+                        // Editable name field (pre-filled from template, can be customised)
+                        <input
+                            type="text"
+                            name="workout_name"
+                            class="input"
+                            placeholder="e.g. Stronglifts A, My Custom Day"
+                            value=move || workout_name.get()
+                            on:input=move |ev| {
+                                set_workout_name.set(event_target_value(&ev));
+                            }
+                        />
+                    </div>
+
+                    // ── Weight unit ───────────────────────────────────────────
+                    <div class="form-group">
+                        <label class="form-label">"Weight unit"</label>
                         <div class="btn-group">
                             <button
                                 type="button"
-                                class=move || if wtype.get() == "A" { "btn btn-selected" } else { "btn" }
-                                on:click=move |_| set_wtype.set("A".into())
-                            >"A (Squat / Bench / Row)"</button>
+                                class=move || if weight_unit.get() == "kg" { "btn btn-selected" } else { "btn" }
+                                on:click=move |_| set_weight_unit.set("kg".into())
+                            >"kg"</button>
                             <button
                                 type="button"
-                                class=move || if wtype.get() == "B" { "btn btn-selected" } else { "btn" }
-                                on:click=move |_| set_wtype.set("B".into())
-                            >"B (Squat / OHP / Deadlift)"</button>
+                                class=move || if weight_unit.get() == "lb" { "btn btn-selected" } else { "btn" }
+                                on:click=move |_| set_weight_unit.set("lb".into())
+                            >"lb"</button>
                         </div>
-                        // Hidden field that goes into the form payload
-                        <input type="hidden" name="workout_type" value=move || wtype.get()/>
+                        <input type="hidden" name="weight_unit" value=move || weight_unit.get()/>
                     </div>
 
-                    // Weight inputs — one per exercise
+                    // ── Working weights ───────────────────────────────────────
                     <div class="form-group">
-                        <label class="form-label">"Working weights (kg)"</label>
+                        <label class="form-label">
+                            "Working weights (" {move || weight_unit.get()} ")"
+                        </label>
                         <div class="exercise-inputs">
                             {move || {
                                 let exs = exercises();
                                 let names = ["squat_weight", "second_weight", "third_weight"];
-                                exs.into_iter().enumerate().map(|(i, ex)| {
-                                    let field_name = names[i];
-                                    let label = format!("{} — {} × {}r", ex.name, ex.sets, ex.reps);
-                                    view! {
-                                        <div class="exercise-input-row">
-                                            <label>{label}</label>
-                                            <input
-                                                type="number"
-                                                name=field_name
-                                                min="0"
-                                                step="2.5"
-                                                placeholder="0.0"
-                                                class="input"
-                                            />
-                                        </div>
-                                    }
-                                }).collect_view()
+                                if exs.is_empty() {
+                                    // Custom workout — show 3 generic weight slots
+                                    names.iter().enumerate().map(|(i, &field_name)| {
+                                        let label = format!("Exercise {} weight", i + 1);
+                                        view! {
+                                            <div class="exercise-input-row">
+                                                <label>{label}</label>
+                                                <input
+                                                    type="number"
+                                                    name=field_name
+                                                    min="0"
+                                                    step="2.5"
+                                                    placeholder="0.0"
+                                                    class="input"
+                                                />
+                                            </div>
+                                        }
+                                    }).collect_view()
+                                } else {
+                                    exs.into_iter().enumerate().map(|(i, ex)| {
+                                        let field_name = names[i];
+                                        let label = format!("{} — {} × {}r", ex.name, ex.sets, ex.reps);
+                                        view! {
+                                            <div class="exercise-input-row">
+                                                <label>{label}</label>
+                                                <input
+                                                    type="number"
+                                                    name=field_name
+                                                    min="0"
+                                                    step="2.5"
+                                                    placeholder="0.0"
+                                                    class="input"
+                                                />
+                                            </div>
+                                        }
+                                    }).collect_view()
+                                }
                             }}
                         </div>
                     </div>
 
+                    // ── Notes ─────────────────────────────────────────────────
                     <div class="form-group">
                         <label class="form-label" for="notes">"Notes (optional)"</label>
                         <input

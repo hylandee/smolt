@@ -57,13 +57,18 @@ pub fn Charts() -> impl IntoView {
                         Err(e) => view! {
                             <div class="alert alert-error">"Error: " {e.to_string()}</div>
                         }.into_any(),
-                        Ok(points) => view! {
-                            <LineChart
-                                title=move || format!("{} — working weight (kg)", selected_lift.get())
-                                points=points.clone()
-                                y_unit="kg".to_string()
-                            />
-                        }.into_any(),
+                        Ok(points) => {
+                            let unit = points.first().map(|p| p.weight_unit.clone()).unwrap_or_else(|| "kg".to_string());
+                            let unit2 = unit.clone();
+                            let title_lift = selected_lift.get();
+                            view! {
+                                <LineChart
+                                    title=move || format!("{} — working weight ({})", title_lift, unit)
+                                    points=points.clone()
+                                    y_unit=unit2
+                                />
+                            }.into_any()
+                        },
                     })}
                 </Suspense>
             </div>
@@ -79,13 +84,15 @@ pub fn Charts() -> impl IntoView {
                         Ok(raw) => {
                             let points: Vec<LiftHistoryPoint> = raw
                                 .into_iter()
-                                .map(|(date, weight)| LiftHistoryPoint { date, weight })
+                                .map(|(date, weight, weight_unit)| LiftHistoryPoint { date, weight, weight_unit })
                                 .collect();
+                            let unit = points.first().map(|p| p.weight_unit.clone()).unwrap_or_else(|| "kg".to_string());
+                            let title_unit = unit.clone();
                             view! {
                                 <LineChart
-                                    title=move || "Bodyweight (kg)".to_string()
+                                    title=move || format!("Bodyweight ({})", title_unit)
                                     points=points.clone()
-                                    y_unit="kg".to_string()
+                                    y_unit=unit.clone()
                                 />
                             }.into_any()
                         }
@@ -107,8 +114,10 @@ const PAD_B: f64 = 40.0;
 
 #[component]
 pub fn LineChart(
-    #[prop(into)] title:  Signal<String>,
+    #[prop(into)] title: Signal<String>,
     points: Vec<LiftHistoryPoint>,
+    /// Y-axis unit label (used for axis; per-point tooltip uses each point's own unit).
+    #[prop(into)]
     y_unit: String,
 ) -> impl IntoView {
     if points.is_empty() {
@@ -151,7 +160,7 @@ pub fn LineChart(
         .map(|(i, p)| {
             let cx = format!("{:.1}", to_x(i));
             let cy = format!("{:.1}", to_y(p.weight));
-            let label = format!("{:.1} {}", p.weight, y_unit);
+            let label = format!("{:.1} {}", p.weight, p.weight_unit);
             let date_label = p.date.get(..10).unwrap_or(&p.date).to_string();
             view! {
                 <circle cx=cx.clone() cy=cy.clone() r="5" class="chart-dot">
