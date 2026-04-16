@@ -1,0 +1,23 @@
+# Rust/Cargo
+/target/
+
+# Leptos build output
+/target/site/
+
+# SQLite databases
+*.db
+*.db-shm
+*.db-wal
+
+# Environment overrides (contains secrets)
+.env
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
