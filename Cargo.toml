@@ -1,0 +1,79 @@
+[package]
+name = "smolt"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "smolt"
+path = "src/main.rs"
+required-features = ["ssr"]
+
+[profile.wasm-release]
+inherits = "release"
+opt-level = "z"
+lto = true
+codegen-units = 1
+
+# ── Always-available dependencies ─────────────────────────────────────────────
+[dependencies]
+leptos       = { version = "0.8", features = [] }
+leptos_meta  = { version = "0.8", features = [] }
+leptos_router = { version = "0.8", features = [] }
+serde        = { version = "1", features = ["derive"] }
+thiserror    = "1"
+console_error_panic_hook = { version = "0.1", optional = true }
+wasm-bindgen = { version = "0.2", optional = true }
+
+# ── SSR-only dependencies ──────────────────────────────────────────────────────
+leptos_axum  = { version = "0.8", optional = true }
+axum         = { version = "0.8", features = ["macros"], optional = true }
+tokio        = { version = "1",   features = ["full"], optional = true }
+tower-http   = { version = "0.6", features = ["fs", "compression-gzip"], optional = true }
+sqlx         = { version = "0.8", features = ["runtime-tokio", "tls-native-tls", "sqlite", "migrate"], optional = true }
+tracing             = { version = "0.1", optional = true }
+tracing-subscriber  = { version = "0.3", features = ["env-filter", "fmt", "json"], optional = true }
+dotenvy      = { version = "0.15", optional = true }
+
+# ── Features ──────────────────────────────────────────────────────────────────
+# In Leptos 0.8, leptos_meta and leptos_router no longer expose a "hydrate"
+# feature – hydration is driven solely by the "hydrate" feature on leptos.
+[features]
+default = []
+
+hydrate = [
+    "dep:console_error_panic_hook",
+    "dep:wasm-bindgen",
+    "leptos/hydrate",
+]
+
+ssr = [
+    "dep:leptos_axum",
+    "dep:axum",
+    "dep:tokio",
+    "dep:tower-http",
+    "dep:sqlx",
+    "dep:tracing",
+    "dep:tracing-subscriber",
+    "dep:dotenvy",
+    "leptos/ssr",
+    "leptos_meta/ssr",
+    "leptos_router/ssr",
+]
+
+# ── cargo-leptos metadata ──────────────────────────────────────────────────────
+[package.metadata.leptos]
+output-name          = "smolt"
+site-root            = "target/site"
+site-pkg-dir         = "pkg"
+style-file           = "style/main.scss"
+assets-dir           = "public"
+bin-features         = ["ssr"]
+bin-default-features = false
+lib-features         = ["hydrate"]
+lib-default-features = false
+env                  = "DEV"
+bin-profile-release  = "release"
+lib-profile-release  = "wasm-release"
