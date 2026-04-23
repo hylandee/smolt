@@ -1,47 +1,29 @@
-*.db
-*.db-shm
-*.db-wal
+# Compiled binary (root level only)
+/stronglifts
 
-# Environment overrides (contains secrets)
-.env
-
-# Editor
-=======
 # Build artifacts
 /target/
 /site/
 
-# Compiled binaries
-stronglifts
-*.exe
-*.dll
-*.so
-*.dylib
-
 # Database files
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
 
-# OS and editor files
-.DS_Store
->>>>>>> 5c2c635 (initial stuff)
+# Environment overrides (contains secrets)
+.env
+
+# Editor / OS
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# OS
+*~
 .DS_Store
 Thumbs.db
-=======
-*~
-.env
 
 # Go build cache
 .cache/
-
-# Node dependencies (if any frontend tooling added later)
-node_modules/
-npm-debug.log
-yarn-lock.file
+/bin/
