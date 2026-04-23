@@ -1,0 +1,932 @@
+{{template "base" .}}
+
+{{define "title"}}Standalone Workout Editor — SL5x5{{end}}
+
+{{define "content"}}
+<div style="display:flex;justify-content:flex-end;margin-bottom:1rem;">
+  <a class="btn btn-ghost btn-sm" href="/">Back to Dashboard</a>
+</div>
+
+<h2 style="font-weight:700;font-size:1.25rem;margin-bottom:1rem">{{if .IsEdit}}Edit Standalone Workout{{else}}Standalone Workout Editor{{end}}</h2>
+
+<style>
+  .standalone-editor select {
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: .65rem .9rem;
+    font-size: 1rem;
+    width: 100%;
+  }
+  .standalone-row {
+    display: block;
+    padding: .9rem;
+  }
+  .standalone-row-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: .7rem;
+  }
+  .standalone-row-title {
+    font-weight: 700;
+    font-size: .9rem;
+    color: var(--muted);
+    letter-spacing: .03em;
+  }
+  .standalone-row.dragging {
+    opacity: .6;
+  }
+  .standalone-row.drop-target {
+    outline: 2px dashed var(--border);
+    outline-offset: 3px;
+  }
+  .standalone-row-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .6rem;
+    align-items: end;
+  }
+  .standalone-cardio-block {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: .5rem;
+    padding: .7rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--surface) 86%, transparent);
+  }
+  .standalone-cardio-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .6rem;
+    align-items: end;
+  }
+  .standalone-cardio-fields.single-metric {
+    grid-template-columns: 1fr;
+  }
+  .standalone-row-actions {
+    display: flex;
+    align-items: center;
+    gap: .35rem;
+  }
+  .standalone-action-btn {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    border-radius: 8px;
+    padding: .3rem .45rem;
+    font-size: .8rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .standalone-action-btn.delete {
+    color: var(--red);
+    border-color: color-mix(in srgb, var(--red) 30%, var(--border));
+  }
+  .standalone-drag-handle {
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    padding: .25rem .45rem;
+    color: var(--muted);
+    font-weight: 700;
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+  }
+  .standalone-set-list {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    margin-top: .5rem;
+  }
+  .standalone-set-row {
+    display: grid;
+    grid-template-columns: 72px 1fr 1fr auto;
+    gap: .5rem;
+    align-items: end;
+    padding: .6rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg);
+  }
+  .stepper-group {
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+    flex-wrap: nowrap;
+  }
+  .stepper-group {
+    display: flex;
+    align-items: center;
+    gap: .2rem;
+    flex-wrap: nowrap;
+  }
+  .stepper-btn {
+    flex-shrink: 0;
+    padding: .3rem .45rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: .75rem;
+    font-weight: 600;
+    cursor: pointer;
+    line-height: 1;
+    touch-action: manipulation;
+  }
+  .stepper-btn:active { background: var(--border); }
+  .stepper-input {
+    width: 3.5rem !important;
+    text-align: center;
+    font-size: .95rem !important;
+    padding: .3rem .25rem !important;
+  }
+  /* weight stepper: decrement col | input | increment col */
+  .stepper-weight {
+    display: flex;
+    align-items: center;
+    gap: .2rem;
+    flex-wrap: nowrap;
+  }
+  .stepper-weight-btns {
+    display: flex;
+    flex-direction: column;
+    gap: .2rem;
+  }
+  .standalone-set-number {
+    font-weight: 700;
+    color: var(--muted);
+    font-size: .85rem;
+  }
+  .standalone-drop-placeholder {
+    height: 12px;
+    border: 2px dashed color-mix(in srgb, var(--green) 50%, var(--border));
+    border-radius: 999px;
+    margin: .35rem 0;
+    background: color-mix(in srgb, var(--green) 14%, transparent);
+  }
+  .standalone-pace-display {
+    font-weight: 600;
+    color: var(--text);
+    font-size: .9rem;
+    min-height: 1.2rem;
+  }
+  .standalone-cardio-helper {
+    color: var(--muted);
+    font-size: .83rem;
+    line-height: 1.35;
+    min-height: 1.1rem;
+  }
+  @media (max-width: 560px) {
+    .standalone-row-grid {
+      grid-template-columns: 1fr;
+    }
+    .standalone-cardio-fields,
+    .standalone-cardio-fields.single-metric {
+      grid-template-columns: 1fr;
+    }
+    .standalone-set-row {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+{{if .Error}}
+<div class="alert alert-error">{{.Error}}</div>
+{{end}}
+
+<div class="card standalone-editor">
+  <div class="card-title" style="margin-bottom:.25rem;">Build your workout</div>
+  <div class="card-subtitle" style="margin-bottom:1rem;">Use this when you want something other than strict 5x5.</div>
+
+  <form method="POST" action="{{.FormAction}}" id="standalone-form">
+    <div class="form-group">
+      <label for="title">Workout Name</label>
+      <input type="text" id="title" name="title" placeholder="e.g. Push Day + Treadmill" value="{{if .ExistingWorkout}}{{.ExistingWorkout.Title}}{{end}}" required>
+    </div>
+
+    <div class="form-group">
+      <label for="notes">Notes (optional)</label>
+      <input type="text" id="notes" name="notes" placeholder="How this session should feel..." value="{{if .ExistingWorkout}}{{.ExistingWorkout.Notes}}{{end}}">
+    </div>
+
+    <div id="exercise-list" style="display:flex;flex-direction:column;gap:.75rem;"></div>
+
+    <div style="display:flex;gap:.5rem;align-items:center;margin-top:.75rem;">
+      <button type="button" id="add-strength" class="btn btn-ghost btn-sm">Add Strength</button>
+      <button type="button" id="add-cardio" class="btn btn-ghost btn-sm">Add Cardio</button>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;margin-top:1rem;">
+      <button class="btn btn-primary" type="submit">{{.SubmitLabel}}</button>
+    </div>
+  </form>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+  (function() {
+    var list = document.getElementById('exercise-list');
+    var addStrengthBtn = document.getElementById('add-strength');
+    var addCardioBtn = document.getElementById('add-cardio');
+    if (!list || !addStrengthBtn || !addCardioBtn) return;
+
+    var weightUnit = '{{.WeightUnit}}' || 'lb';
+    var distanceUnit = '{{.DistanceUnit}}' || 'mi';
+    var initialWorkout = {{if .ExistingWorkoutJSON}}{{.ExistingWorkoutJSON}}{{else}}null{{end}};
+    var cardioTypes = ['treadmill', 'staircase', 'bike', 'elliptical'];
+    var strengthOptions = ['Squat', 'Bench Press', 'Deadlift', 'Barbell Row', 'OHP'];
+    var weightSteps = weightUnit === 'kg' ? [2.5, 5] : [5, 10];
+    var distanceSteps = distanceUnit === 'km' ? [5, 2.5] : [1, 0.5];
+
+    function milesToDisplayDistance(miles) {
+      var v = Number(miles) || 0;
+      if (distanceUnit === 'km') return Math.round(v * 1.60934 * 100) / 100;
+      return v;
+    }
+
+    function displayDistanceToMiles(distanceValue) {
+      var v = Number(distanceValue) || 0;
+      if (distanceUnit === 'km') return Math.round((v / 1.60934) * 100) / 100;
+      return v;
+    }
+
+    function intStepperHTML(attr, value) {
+      return '<div class="stepper-group stepper-wrap">' +
+        '<button type="button" class="stepper-btn" data-step="-1">−</button>' +
+        '<input type="text" inputmode="numeric" ' + attr + ' value="' + value + '" class="stepper-input" required>' +
+        '<button type="button" class="stepper-btn" data-step="1">+</button>' +
+        '</div>';
+    }
+
+    // Weight stepper: [−big / −small] [input] [+small / +big] stacked pairs
+    function weightStepperHTML(attr, value) {
+      var s = weightSteps;
+      return '<div class="stepper-weight stepper-wrap">' +
+        '<div class="stepper-weight-btns">' +
+          '<button type="button" class="stepper-btn" data-step="-' + s[1] + '">−' + s[1] + '</button>' +
+          '<button type="button" class="stepper-btn" data-step="-' + s[0] + '">−' + s[0] + '</button>' +
+        '</div>' +
+        '<input type="text" inputmode="decimal" ' + attr + ' value="' + value + '" class="stepper-input" required>' +
+        '<div class="stepper-weight-btns">' +
+          '<button type="button" class="stepper-btn" data-step="' + s[1] + '">+' + s[1] + '</button>' +
+          '<button type="button" class="stepper-btn" data-step="' + s[0] + '">+' + s[0] + '</button>' +
+        '</div>' +
+        '</div>';
+    }
+
+    function attachStepperHandlers(groupEl, onInput, onChange) {
+      var input = groupEl.querySelector('input');
+      groupEl.querySelectorAll('.stepper-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var step = parseFloat(btn.getAttribute('data-step'));
+          var val = parseFloat(input.value) || 0;
+          var newVal = Math.max(0, Math.round((val + step) * 100) / 100);
+          input.value = String(newVal);
+          onInput && onInput(newVal);
+        });
+      });
+      if (onInput) input.addEventListener('input', function() { onInput(parseFloat(input.value) || 0); });
+      if (onChange) input.addEventListener('change', function() { onChange(parseFloat(input.value) || 0); });
+    }
+
+    function cardioLabel(type) {
+      if (window.smoltCardio) return window.smoltCardio.exerciseNameFromType(type);
+      return 'Cardio';
+    }
+
+    function updateStandalonePace(row) {
+      if (!row) return;
+      var typeSelect = row.querySelector('.cardio-type');
+      var paceDisplay = row.querySelector('[data-pace-display]');
+      var timeInput = row.querySelector('input[name="time_minutes"]');
+      var distanceInput = row.querySelector('[data-distance-display]');
+      if (!typeSelect || !paceDisplay) return;
+
+      if (typeSelect.value !== 'treadmill') {
+        paceDisplay.textContent = '';
+        paceDisplay.style.display = 'none';
+        return;
+      }
+
+      paceDisplay.style.display = 'block';
+      var minutes = Number(timeInput && timeInput.value) || 0;
+      var distanceDisplayValue = Number(distanceInput && distanceInput.value) || 0;
+      var distanceMiles = displayDistanceToMiles(distanceDisplayValue);
+      if (minutes <= 0 || distanceMiles <= 0) {
+        paceDisplay.textContent = '--:-- min/mi';
+        return;
+      }
+
+      var pace = minutes / distanceMiles;
+      var paceMin = Math.floor(pace);
+      var paceSec = Math.round((pace - paceMin) * 60);
+      if (paceSec === 60) {
+        paceMin += 1;
+        paceSec = 0;
+      }
+      paceDisplay.textContent = String(paceMin).padStart(2, '0') + ':' + String(paceSec).padStart(2, '0') + ' min/mi';
+    }
+
+    function rowShell() {
+      var wrapper = document.createElement('div');
+      wrapper.className = 'exercise-row standalone-row';
+      wrapper.setAttribute('draggable', 'true');
+      return wrapper;
+    }
+
+    function createActionButton(label, className, handler, title) {
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = className;
+      button.textContent = label;
+      if (title) button.title = title;
+      button.addEventListener('click', handler);
+      return button;
+    }
+
+    function moveRow(row, direction) {
+      if (!row || !row.parentNode) return;
+      if (direction < 0 && row.previousElementSibling) {
+        row.parentNode.insertBefore(row, row.previousElementSibling);
+      } else if (direction > 0 && row.nextElementSibling) {
+        row.parentNode.insertBefore(row.nextElementSibling, row);
+      }
+    }
+
+    function rowActions(row) {
+      var wrap = document.createElement('div');
+      wrap.className = 'standalone-row-actions';
+
+      wrap.appendChild(createActionButton('↑', 'standalone-action-btn', function() {
+        moveRow(row, -1);
+      }, 'Move up'));
+      wrap.appendChild(createActionButton('↓', 'standalone-action-btn', function() {
+        moveRow(row, 1);
+      }, 'Move down'));
+      var deleteBtn = createActionButton('Delete', 'standalone-action-btn delete', function() {
+        if (deleteBtn.getAttribute('data-confirming-delete') !== 'true') {
+          deleteBtn.setAttribute('data-confirming-delete', 'true');
+          deleteBtn.textContent = 'u sure?';
+          setTimeout(function() {
+            if (deleteBtn.getAttribute('data-confirming-delete') === 'true') {
+              deleteBtn.removeAttribute('data-confirming-delete');
+              deleteBtn.textContent = 'Delete';
+            }
+          }, 2200);
+          return;
+        }
+
+        row.remove();
+      }, 'Delete exercise');
+      wrap.appendChild(deleteBtn);
+
+      var handle = document.createElement('span');
+      handle.className = 'standalone-drag-handle';
+      handle.textContent = '⋮⋮';
+      handle.title = 'Drag to reorder';
+      handle.setAttribute('data-drag-handle', 'true');
+      wrap.appendChild(handle);
+      return wrap;
+    }
+
+    function updateSetNumbers(row) {
+      row.querySelectorAll('.standalone-set-row').forEach(function(setRow, idx) {
+        var label = setRow.querySelector('.standalone-set-number');
+        if (label) label.textContent = 'Set ' + (idx + 1);
+      });
+    }
+
+    var defaultWeight = weightUnit === 'kg' ? 20 : 45;
+
+    // Rebuild set-list from simple-mode inputs (sets/reps/weight fields).
+    function applySimpleScheme(row) {
+      var setList = row.querySelector('.standalone-set-list');
+      var setsIn = row.querySelector('[data-simple-sets]');
+      var repsIn = row.querySelector('[data-simple-reps]');
+      var weightIn = row.querySelector('[data-simple-weight]');
+      if (!setList || !setsIn || !repsIn || !weightIn) return;
+      var numSets = Math.max(1, parseInt(setsIn.value, 10) || 5);
+      var numReps = Math.max(1, parseInt(repsIn.value, 10) || 5);
+      var w = parseFloat(weightIn.value) || defaultWeight;
+      while (setList.firstChild) setList.removeChild(setList.firstChild);
+      for (var i = 0; i < numSets; i++) {
+        setList.appendChild(createStrengthSetRow(row, numReps, w));
+      }
+      syncStrengthSummary(row);
+    }
+
+    function syncStrengthSummary(row) {
+      var setRows = row.querySelectorAll('.standalone-set-row');
+      var repsSummary = row.querySelector('input[name="target_reps"]');
+      var weightSummary = row.querySelector('input[name="weight"]');
+      var setsSummary = row.querySelector('input[name="sets"]');
+      var schemeField = row.querySelector('input[name="set_scheme_json"]');
+      if (!repsSummary || !weightSummary || !setsSummary || !schemeField) return;
+
+      var scheme = [];
+      setRows.forEach(function(setRow, idx) {
+        var reps = Number(setRow.querySelector('[data-set-reps]').value) || 0;
+        var weight = Number(setRow.querySelector('[data-set-weight]').value) || 0;
+        scheme.push({
+          position: idx + 1,
+          targetReps: reps,
+          weight: weight
+        });
+      });
+
+      setsSummary.value = String(scheme.length);
+      repsSummary.value = scheme.length ? String(scheme[0].targetReps) : '5';
+      weightSummary.value = scheme.length ? String(scheme[0].weight) : String(defaultWeight);
+      schemeField.value = JSON.stringify(scheme);
+      updateSetNumbers(row);
+    }
+
+    function propagateFirstSetWeight(row, newWeight) {
+      var setRows = row.querySelectorAll('.standalone-set-row');
+      setRows.forEach(function(setRow, idx) {
+        if (idx === 0) return;
+        var inp = setRow.querySelector('[data-set-weight]');
+        if (inp) inp.value = newWeight;
+      });
+      syncStrengthSummary(row);
+    }
+
+    function createStrengthSetRow(row, reps, weight) {
+      var setRow = document.createElement('div');
+      setRow.className = 'standalone-set-row';
+      setRow.innerHTML =
+        '<div class="standalone-set-number">Set</div>' +
+        '<div class="form-group" style="margin-bottom:0;">' +
+          '<label>Reps</label>' +
+          intStepperHTML('data-set-reps', reps) +
+        '</div>' +
+        '<div class="form-group" style="margin-bottom:0;">' +
+          '<label>Weight (' + weightUnit + ')</label>' +
+          weightStepperHTML('data-set-weight', weight) +
+        '</div>' +
+        '<button type="button" class="standalone-action-btn delete">Remove</button>';
+
+      attachStepperHandlers(
+        setRow.querySelector('[data-set-reps]').closest('.stepper-wrap'),
+        function() { syncStrengthSummary(row); }
+      );
+
+      var weightGroup = setRow.querySelector('[data-set-weight]').closest('.stepper-wrap');
+      var weightInput = setRow.querySelector('[data-set-weight]');
+      function onWeightChange() {
+        var allSetRows = row.querySelectorAll('.standalone-set-row');
+        if (allSetRows[0] === setRow) {
+          propagateFirstSetWeight(row, weightInput.value);
+        } else {
+          syncStrengthSummary(row);
+        }
+      }
+      attachStepperHandlers(weightGroup, onWeightChange);
+
+      setRow.querySelector('.standalone-action-btn.delete').addEventListener('click', function() {
+        if (row.querySelectorAll('.standalone-set-row').length <= 1) return;
+        setRow.remove();
+        syncStrengthSummary(row);
+      });
+
+      return setRow;
+    }
+
+    function addStrengthRow(initialItem) {
+      var row = rowShell();
+
+      var strengthSelect = strengthOptions.map(function(name) {
+        return '<option value="' + name + '">' + name + '</option>';
+      }).join('');
+
+      var initialScheme = (initialItem && initialItem.SetScheme && initialItem.SetScheme.length) ? initialItem.SetScheme : null;
+      var isCustom = !!(initialScheme && (
+        initialScheme.length !== 5 ||
+        initialScheme.some(function(s) { return s.TargetReps !== initialScheme[0].TargetReps || s.Weight !== initialScheme[0].Weight; })
+      ));
+
+      // Simple-mode defaults
+      var simSets = initialScheme ? initialScheme.length : 5;
+      var simReps = initialScheme ? initialScheme[0].TargetReps : 5;
+      var simWeight = initialScheme ? initialScheme[0].Weight : defaultWeight;
+
+      row.insertAdjacentHTML('beforeend',
+        '<div class="standalone-row-head">' +
+          '<div class="standalone-row-title">Strength</div>' +
+        '</div>' +
+        '<div class="standalone-row-grid">' +
+          '<input type="hidden" name="exercise_type" value="strength">' +
+          '<input type="hidden" name="set_scheme_json" value="">' +
+          '<div class="form-group" style="margin-bottom:0;">' +
+            '<label>Exercise</label>' +
+            '<select name="exercise_name">' + strengthSelect + '</select>' +
+          '</div>' +
+          '<div class="standalone-scheme-simple" style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap;">' +
+            '<div class="form-group" style="margin-bottom:0;">' +
+              '<label>Sets</label>' +
+              intStepperHTML('data-simple-sets', simSets) +
+            '</div>' +
+            '<div class="form-group" style="margin-bottom:0;">' +
+              '<label>Reps</label>' +
+              intStepperHTML('data-simple-reps', simReps) +
+            '</div>' +
+            '<div class="form-group" style="margin-bottom:0;">' +
+              '<label>Weight (' + weightUnit + ')</label>' +
+              weightStepperHTML('data-simple-weight', simWeight) +
+            '</div>' +
+            '<button type="button" class="btn btn-ghost btn-sm" data-customize-btn style="margin-bottom:2px;">Customize</button>' +
+          '</div>' +
+          '<div class="standalone-scheme-custom" style="display:none;">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.25rem;">' +
+              '<span class="card-subtitle">Per-set reps &amp; weight</span>' +
+              '<div style="display:flex;gap:.5rem;">' +
+                '<button type="button" class="btn btn-ghost btn-sm" data-add-set>Add Set</button>' +
+                '<button type="button" class="btn btn-ghost btn-sm" data-simple-btn>Simple</button>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+          '<input type="hidden" name="sets" value="5">' +
+          '<input type="hidden" name="target_reps" value="5">' +
+          '<input type="hidden" name="weight" value="' + simWeight + '">' +
+          '<input type="hidden" name="time_minutes" value="">' +
+          '<input type="hidden" name="distance_miles" value="">' +
+        '</div>'
+      );
+
+      var setList = document.createElement('div');
+      setList.className = 'standalone-set-list';
+      setList.style.display = 'none';
+      row.querySelector('.standalone-scheme-custom').appendChild(setList);
+
+      if (initialScheme) {
+        initialScheme.forEach(function(setDef) {
+          setList.appendChild(createStrengthSetRow(row, setDef.TargetReps, setDef.Weight));
+        });
+      } else {
+        for (var i = 0; i < 5; i++) {
+          setList.appendChild(createStrengthSetRow(row, 5, defaultWeight));
+        }
+      }
+
+      if (initialItem && initialItem.ExerciseName) {
+        row.querySelector('select[name="exercise_name"]').value = initialItem.ExerciseName;
+      }
+
+      row.querySelector('.standalone-row-head').appendChild(rowActions(row));
+
+      // Simple mode inputs → rebuild set list when changed
+      var simpleSection = row.querySelector('.standalone-scheme-simple');
+      attachStepperHandlers(simpleSection.querySelector('[data-simple-sets]').closest('.stepper-wrap'), function() { applySimpleScheme(row); });
+      attachStepperHandlers(simpleSection.querySelector('[data-simple-reps]').closest('.stepper-wrap'), function() { applySimpleScheme(row); });
+      attachStepperHandlers(simpleSection.querySelector('[data-simple-weight]').closest('.stepper-wrap'), function() { applySimpleScheme(row); });
+
+      // Customize button → switch to custom mode
+      row.querySelector('[data-customize-btn]').addEventListener('click', function() {
+        applySimpleScheme(row); // sync set list from simple fields first
+        row.querySelector('.standalone-scheme-simple').style.display = 'none';
+        row.querySelector('.standalone-scheme-custom').style.display = '';
+        setList.style.display = '';
+      });
+
+      // Simple button → switch back to simple mode
+      row.querySelector('[data-simple-btn]').addEventListener('click', function() {
+        row.querySelector('.standalone-scheme-simple').style.display = 'flex';
+        row.querySelector('.standalone-scheme-custom').style.display = 'none';
+        setList.style.display = 'none';
+        syncStrengthSummary(row); // hidden sets still drive hidden fields
+      });
+
+      row.querySelector('[data-add-set]').addEventListener('click', function() {
+        var lastWeight = defaultWeight;
+        var rows = setList.querySelectorAll('.standalone-set-row');
+        if (rows.length) {
+          lastWeight = Number(rows[rows.length - 1].querySelector('[data-set-weight]').value) || defaultWeight;
+        }
+        setList.appendChild(createStrengthSetRow(row, 5, lastWeight));
+        syncStrengthSummary(row);
+      });
+
+      if (isCustom) {
+        row.querySelector('.standalone-scheme-simple').style.display = 'none';
+        row.querySelector('.standalone-scheme-custom').style.display = '';
+        setList.style.display = '';
+      }
+
+      applySimpleScheme(row);
+      list.appendChild(row);
+      attachRowReordering(row);
+    }
+
+    function addCardioRow(defaultType, initialItem) {
+      var row = rowShell();
+
+      var selectedType = defaultType;
+      if (initialItem && initialItem.ExerciseType) {
+        selectedType = initialItem.ExerciseType;
+      }
+
+      var options = cardioTypes.map(function(t) {
+        return '<option value="' + t + '"' + (t === selectedType ? ' selected' : '') + '>' + cardioLabel(t) + '</option>';
+      }).join('');
+
+      var defaults = window.smoltCardio.defaultsForType(selectedType, distanceUnit);
+      var timeMinutes = defaults.timeMinutes;
+      var distanceDisplay = defaults.distanceDisplay;
+      var hasInitialDistance = false;
+      var hasInitialTime = false;
+      if (initialItem && typeof initialItem.TimeMinutes === 'number' && initialItem.TimeMinutes > 0) {
+        timeMinutes = initialItem.TimeMinutes;
+        hasInitialTime = true;
+      }
+      if (initialItem && typeof initialItem.DistanceMiles === 'number' && initialItem.DistanceMiles > 0) {
+        distanceDisplay = milesToDisplayDistance(initialItem.DistanceMiles);
+        hasInitialDistance = true;
+      }
+
+      row.insertAdjacentHTML('beforeend',
+        '<div class="standalone-row-head">' +
+          '<div class="standalone-row-title">Cardio</div>' +
+        '</div>' +
+        '<div class="standalone-row-grid">' +
+          '<div class="form-group" style="margin-bottom:0;">' +
+            '<label>Exercise</label>' +
+            '<select name="exercise_type" class="cardio-type">' + options + '</select>' +
+          '</div>' +
+          '<input type="hidden" name="exercise_name" value="">' +
+          '<input type="hidden" name="set_scheme_json" value="">' +
+          '<div class="standalone-cardio-block">' +
+            '<div class="standalone-cardio-fields">' +
+              '<div class="form-group" style="margin-bottom:0;">' +
+                '<label>Time (min)</label>' +
+                '<div class="stepper-group stepper-wrap">' +
+                  '<button type="button" class="stepper-btn" data-step="-10">\u221210</button>' +
+                  '<button type="button" class="stepper-btn" data-step="-1">\u22121</button>' +
+                  '<input type="text" name="time_minutes" value="' + timeMinutes + '" inputmode="numeric" class="stepper-input" required>' +
+                  '<button type="button" class="stepper-btn" data-step="1">+1</button>' +
+                  '<button type="button" class="stepper-btn" data-step="10">+10</button>' +
+                '</div>' +
+              '</div>' +
+              '<div class="form-group cardio-distance-wrap" style="margin-bottom:0;">' +
+                '<label>Distance (' + distanceUnit + ')</label>' +
+                '<div class="stepper-group stepper-wrap">' +
+                  '<button type="button" class="stepper-btn" data-step="-' + distanceSteps[0] + '">\u2212' + distanceSteps[0] + '</button>' +
+                  '<button type="button" class="stepper-btn" data-step="-' + distanceSteps[1] + '">\u2212' + distanceSteps[1] + '</button>' +
+                  '<input type="text" data-distance-display value="' + distanceDisplay + '" inputmode="decimal" class="stepper-input" required>' +
+                  '<button type="button" class="stepper-btn" data-step="' + distanceSteps[1] + '">+' + distanceSteps[1] + '</button>' +
+                  '<button type="button" class="stepper-btn" data-step="' + distanceSteps[0] + '">+' + distanceSteps[0] + '</button>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="standalone-cardio-helper" data-cardio-helper></div>' +
+            '<div class="standalone-pace-display" data-pace-display></div>' +
+          '</div>' +
+          '<input type="hidden" name="distance_miles" value="' + (distanceDisplay > 0 ? displayDistanceToMiles(distanceDisplay) : '') + '">' +
+          '<input type="hidden" name="sets" value="">' +
+          '<input type="hidden" name="target_reps" value="">' +
+          '<input type="hidden" name="weight" value="">' +
+        '</div>'
+      );
+
+      var typeSelect = row.querySelector('.cardio-type');
+      var cardioFields = row.querySelector('.standalone-cardio-fields');
+      var helperDisplay = row.querySelector('[data-cardio-helper]');
+      var distanceWrap = row.querySelector('.cardio-distance-wrap');
+      var distanceInput = distanceWrap.querySelector('[data-distance-display]');
+      var distanceMilesHidden = row.querySelector('input[name="distance_miles"]');
+      var timeInput = row.querySelector('input[name="time_minutes"]');
+
+      // Attach stepper buttons for time and distance
+      [row.querySelector('input[name="time_minutes"]').closest('.stepper-wrap'),
+       distanceWrap.querySelector('.stepper-wrap')].forEach(function(grp) {
+        if (!grp) return;
+        var inp = grp.querySelector('input');
+        grp.querySelectorAll('.stepper-btn').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            var step = parseFloat(btn.getAttribute('data-step'));
+            var val = parseFloat(inp.value) || 0;
+            var next = Math.max(0, Math.round((val + step) * 100) / 100);
+            inp.value = String(next);
+            if (inp.hasAttribute('data-distance-display') && distanceMilesHidden) {
+              distanceMilesHidden.value = String(displayDistanceToMiles(next));
+            }
+            updateStandalonePace(row);
+          });
+        });
+        if (inp.name === 'time_minutes') {
+          inp.addEventListener('input', function() {
+            updateStandalonePace(row);
+          });
+          inp.addEventListener('change', function() {
+            updateStandalonePace(row);
+          });
+        }
+        if (inp.hasAttribute('data-distance-display') && distanceMilesHidden) {
+          inp.addEventListener('input', function() {
+            distanceMilesHidden.value = String(displayDistanceToMiles(inp.value));
+            updateStandalonePace(row);
+          });
+          inp.addEventListener('change', function() {
+            distanceMilesHidden.value = String(displayDistanceToMiles(inp.value));
+            updateStandalonePace(row);
+          });
+        }
+      });
+
+      function syncCardioMode() {
+        var t = typeSelect.value;
+        var nextDefaults = window.smoltCardio.defaultsForType(t, distanceUnit);
+        var showDistance = nextDefaults.usesDistance;
+        distanceWrap.style.display = showDistance ? 'block' : 'none';
+        if (cardioFields) {
+          cardioFields.classList.toggle('single-metric', !showDistance);
+        }
+        if (helperDisplay) {
+          helperDisplay.textContent = window.smoltCardio.helperText(t, distanceUnit);
+        }
+        if (!hasInitialTime || typeSelect.getAttribute('data-prev') !== t) {
+          timeInput.value = String(nextDefaults.timeMinutes);
+        }
+        if (!showDistance) {
+          distanceInput.value = '';
+          distanceMilesHidden.value = '';
+        } else if (!hasInitialDistance || typeSelect.getAttribute('data-prev') !== t) {
+          distanceInput.value = String(nextDefaults.distanceDisplay);
+          distanceMilesHidden.value = String(displayDistanceToMiles(nextDefaults.distanceDisplay));
+        }
+        typeSelect.setAttribute('data-prev', t);
+        hasInitialTime = false;
+        hasInitialDistance = false;
+        updateStandalonePace(row);
+      }
+
+      typeSelect.addEventListener('change', syncCardioMode);
+      syncCardioMode();
+      row.querySelector('.standalone-row-head').appendChild(rowActions(row));
+      list.appendChild(row);
+      attachRowReordering(row);
+    }
+
+    var draggingRow = null;
+    var touchDragState = {
+      active: false,
+      row: null,
+      targetRow: null,
+      insertBefore: true,
+      holdTimer: null,
+      touchId: null
+    };
+    var dropPlaceholder = document.createElement('div');
+    dropPlaceholder.className = 'standalone-drop-placeholder';
+
+    function clearDropTargets() {
+      list.querySelectorAll('.standalone-row').forEach(function(row) {
+        row.classList.remove('drop-target');
+      });
+    }
+
+    function attachRowReordering(row) {
+      row.addEventListener('dragstart', function(e) {
+        draggingRow = row;
+        row.classList.add('dragging');
+        if (e.dataTransfer) {
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', 'row');
+        }
+      });
+      row.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        if (draggingRow && draggingRow !== row) {
+          row.classList.add('drop-target');
+        }
+      });
+      row.addEventListener('dragleave', function() {
+        row.classList.remove('drop-target');
+      });
+      row.addEventListener('drop', function(e) {
+        e.preventDefault();
+        row.classList.remove('drop-target');
+        if (!draggingRow || draggingRow === row) return;
+        list.insertBefore(draggingRow, row);
+      });
+      row.addEventListener('dragend', function() {
+        row.classList.remove('dragging');
+        clearDropTargets();
+        draggingRow = null;
+      });
+
+      var handle = row.querySelector('[data-drag-handle]');
+      if (!handle) return;
+
+      function clearTouchDrag() {
+        if (touchDragState.holdTimer) {
+          clearTimeout(touchDragState.holdTimer);
+          touchDragState.holdTimer = null;
+        }
+        if (touchDragState.row) {
+          touchDragState.row.classList.remove('dragging');
+        }
+        touchDragState.active = false;
+        touchDragState.row = null;
+        touchDragState.targetRow = null;
+        touchDragState.insertBefore = true;
+        touchDragState.touchId = null;
+        clearDropTargets();
+        if (dropPlaceholder.parentNode) {
+          dropPlaceholder.parentNode.removeChild(dropPlaceholder);
+        }
+      }
+
+      function findTouchById(touchList, id) {
+        if (!touchList) return null;
+        for (var i = 0; i < touchList.length; i++) {
+          if (touchList[i].identifier === id) return touchList[i];
+        }
+        return null;
+      }
+
+      function updateTouchDropTarget(touch) {
+        if (!touchDragState.active || !touchDragState.row) return;
+        var hovered = document.elementFromPoint(touch.clientX, touch.clientY);
+        var targetRow = hovered && hovered.closest ? hovered.closest('.standalone-row') : null;
+
+        clearDropTargets();
+        touchDragState.targetRow = null;
+        if (!targetRow || targetRow === touchDragState.row) {
+          if (dropPlaceholder.parentNode) dropPlaceholder.parentNode.removeChild(dropPlaceholder);
+          return;
+        }
+
+        targetRow.classList.add('drop-target');
+        touchDragState.targetRow = targetRow;
+        var rect = targetRow.getBoundingClientRect();
+        touchDragState.insertBefore = touch.clientY < (rect.top + rect.height / 2);
+        if (touchDragState.insertBefore) {
+          list.insertBefore(dropPlaceholder, targetRow);
+        } else {
+          list.insertBefore(dropPlaceholder, targetRow.nextSibling);
+        }
+      }
+
+      handle.addEventListener('touchstart', function(e) {
+        if (!e.touches || e.touches.length === 0) return;
+        var firstTouch = e.touches[0];
+        touchDragState.touchId = firstTouch.identifier;
+        touchDragState.holdTimer = setTimeout(function() {
+          touchDragState.active = true;
+          touchDragState.row = row;
+          row.classList.add('dragging');
+        }, 260);
+      }, { passive: true });
+
+      handle.addEventListener('touchmove', function(e) {
+        var touch = findTouchById(e.touches, touchDragState.touchId);
+        if (!touch) return;
+        if (!touchDragState.active) return;
+        e.preventDefault();
+        updateTouchDropTarget(touch);
+      }, { passive: false });
+
+      handle.addEventListener('touchend', function() {
+        if (!touchDragState.active) {
+          clearTouchDrag();
+          return;
+        }
+        var source = touchDragState.row;
+        var target = touchDragState.targetRow;
+        var insertBefore = touchDragState.insertBefore;
+        clearTouchDrag();
+        if (!source || !target || source === target) return;
+        if (insertBefore) {
+          list.insertBefore(source, target);
+        } else {
+          list.insertBefore(source, target.nextSibling);
+        }
+      }, { passive: true });
+
+      handle.addEventListener('touchcancel', function() {
+        clearTouchDrag();
+      }, { passive: true });
+    }
+
+    addStrengthBtn.addEventListener('click', addStrengthRow);
+    addCardioBtn.addEventListener('click', function() { addCardioRow('treadmill'); });
+
+    if (initialWorkout && initialWorkout.Items && initialWorkout.Items.length) {
+      initialWorkout.Items.forEach(function(item) {
+        if (item.ExerciseType === 'strength') {
+          addStrengthRow(item);
+        } else {
+          addCardioRow(item.ExerciseType || 'treadmill', item);
+        }
+      });
+    } else {
+      addStrengthRow();
+      addCardioRow('treadmill');
+    }
+  })();
+</script>
+{{end}}

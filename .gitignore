@@ -1,10 +1,3 @@
-# Rust/Cargo
-/target/
-
-# Leptos build output
-/target/site/
-
-# SQLite databases
 *.db
 *.db-shm
 *.db-wal
@@ -13,6 +6,26 @@
 .env
 
 # Editor
+=======
+# Build artifacts
+/target/
+/site/
+
+# Compiled binaries
+stronglifts
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# OS and editor files
+.DS_Store
+>>>>>>> 5c2c635 (initial stuff)
 .vscode/
 .idea/
 *.swp
@@ -21,3 +34,14 @@
 # OS
 .DS_Store
 Thumbs.db
+=======
+*~
+.env
+
+# Go build cache
+.cache/
+
+# Node dependencies (if any frontend tooling added later)
+node_modules/
+npm-debug.log
+yarn-lock.file

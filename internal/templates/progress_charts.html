@@ -1,0 +1,173 @@
+{{template "base" .}}
+
+{{define "title"}}Progress Charts — SL5x5{{end}}
+
+{{define "content"}}
+<div style="display:flex;justify-content:flex-end;margin-bottom:1rem;">
+  <a class="btn btn-ghost btn-sm" href="/">Back to Dashboard</a>
+</div>
+
+<h2 style="font-weight:700;font-size:1.25rem;margin-bottom:1rem">Progress By Exercise</h2>
+
+<div class="card">
+  <div class="card-title" style="margin-bottom:.25rem;">Strength Progression</div>
+  <div class="card-subtitle" style="margin-bottom:1rem;">Pick Squat, Bench Press, and other lifts to see weight progression over time.</div>
+
+  <div class="form-group" style="max-width:320px;">
+    <label for="exercise-picker">Exercise</label>
+    <select id="exercise-picker" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:.65rem .9rem;font-size:1rem;"></select>
+  </div>
+
+  <canvas id="progress-chart" height="140"></canvas>
+</div>
+
+<div class="card">
+  <div class="card-title" style="margin-bottom:.25rem;">Cardio Progression</div>
+  <div class="card-subtitle" style="margin-bottom:1rem;">Overlaid distance and duration trends for cardio exercises when data exists.</div>
+  <canvas id="cardio-chart" height="140"></canvas>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+  (function() {
+    function parseJSONStringPayload(raw) {
+      var parsed = JSON.parse(raw);
+      if (typeof parsed === 'string') {
+        return JSON.parse(parsed);
+      }
+      return parsed;
+    }
+
+    var distanceUnit = '{{.DistanceUnit}}' || 'mi';
+
+    function milesToDisplayDistance(miles) {
+      var v = Number(miles) || 0;
+      if (distanceUnit === 'km') return Math.round(v * 1.60934 * 100) / 100;
+      return v;
+    }
+
+    var series = parseJSONStringPayload({{printf "%q" .StrengthSeriesJSON}});
+    var cardioSeries = parseJSONStringPayload({{printf "%q" .CardioSeriesJSON}});
+
+    var picker = document.getElementById('exercise-picker');
+    var canvas = document.getElementById('progress-chart');
+    if (!picker || !canvas) return;
+
+    var names = Object.keys(series || {});
+    if (names.length === 0) {
+      var empty = document.createElement('div');
+      empty.className = 'card-subtitle';
+      empty.textContent = 'No completed workout data yet.';
+      canvas.parentNode.appendChild(empty);
+      return;
+    }
+
+    names.forEach(function(name) {
+      var o = document.createElement('option');
+      o.value = name;
+      o.textContent = name;
+      picker.appendChild(o);
+    });
+
+    var chart = new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      data: { labels: [], datasets: [{ label: '', data: [], borderColor: '#2f6fed', tension: 0.2 }] },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: '#d8dfeb' } },
+          y: { grid: { color: '#d8dfeb' }, beginAtZero: true }
+        }
+      }
+    });
+
+    function render(name) {
+      var points = series[name] || [];
+      chart.data.labels = points.map(function(p) { return p.Date; });
+      chart.data.datasets[0].label = name;
+      chart.data.datasets[0].data = points.map(function(p) { return p.Value; });
+      chart.update();
+    }
+
+    picker.addEventListener('change', function() { render(picker.value); });
+    render(names[0]);
+
+    var cardioCanvas = document.getElementById('cardio-chart');
+    if (cardioCanvas) {
+      var labelsMap = {};
+      Object.keys(cardioSeries || {}).forEach(function(exName) {
+        (cardioSeries[exName] || []).forEach(function(p) {
+          labelsMap[p.Date] = true;
+        });
+      });
+      var labels = Object.keys(labelsMap).sort();
+
+      var colors = {
+        'Treadmill': '#0ea5e9',
+        'Exercise Bike': '#22c55e',
+        'Staircase': '#f59e0b',
+        'Elliptical': '#ef4444'
+      };
+
+      var distanceLabel = distanceUnit === 'km' ? ' distance (km)' : ' distance (mi)';
+      var distanceAxisLabel = distanceUnit === 'km' ? 'Kilometers' : 'Miles';
+
+      var datasets = [];
+      Object.keys(cardioSeries || {}).forEach(function(exName) {
+        var points = cardioSeries[exName] || [];
+        var byDate = {};
+        points.forEach(function(p) { byDate[p.Date] = p; });
+        var color = colors[exName] || '#6c63ff';
+
+        datasets.push({
+          label: exName + ' duration (min)',
+          data: labels.map(function(d) { return byDate[d] ? byDate[d].DurationMins : null; }),
+          borderColor: color,
+          backgroundColor: color,
+          tension: 0.2,
+          spanGaps: true,
+          yAxisID: 'yDuration'
+        });
+
+        var hasDistance = points.some(function(p) { return p.Distance > 0; });
+        if (hasDistance) {
+          datasets.push({
+            label: exName + distanceLabel,
+            data: labels.map(function(d) { return byDate[d] ? milesToDisplayDistance(byDate[d].Distance) : null; }),
+            borderColor: color,
+            backgroundColor: color,
+            borderDash: [6, 4],
+            tension: 0.2,
+            spanGaps: true,
+            yAxisID: 'yDistance'
+          });
+        }
+      });
+
+      if (datasets.length === 0) {
+        var emptyCardio = document.createElement('div');
+        emptyCardio.className = 'card-subtitle';
+        emptyCardio.textContent = 'No cardio progression data yet.';
+        cardioCanvas.parentNode.appendChild(emptyCardio);
+      } else {
+        new Chart(cardioCanvas.getContext('2d'), {
+          type: 'line',
+          data: { labels: labels, datasets: datasets },
+          options: {
+            responsive: true,
+            plugins: { legend: { display: true, position: 'bottom' } },
+            scales: {
+              x: { grid: { color: '#d8dfeb' } },
+              yDuration: { type: 'linear', position: 'left', title: { display: true, text: 'Minutes' }, beginAtZero: true },
+              yDistance: { type: 'linear', position: 'right', title: { display: true, text: distanceAxisLabel }, beginAtZero: true, grid: { drawOnChartArea: false } }
+            }
+          }
+        });
+      }
+    }
+  })();
+</script>
+{{end}}

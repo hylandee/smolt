@@ -1,0 +1,70 @@
+{{template "base" .}}
+
+{{define "title"}}Welcome Setup — SL5×5{{end}}
+
+{{define "content"}}
+<h2 style="font-weight:700;font-size:1.25rem;margin-bottom:1rem">Welcome Setup</h2>
+<div class="card-subtitle" style="margin-bottom:1rem;">Choose units and your starting weights before your first workout.</div>
+
+{{if .Error}}
+<div class="alert alert-error">{{.Error}}</div>
+{{end}}
+
+<div class="card">
+  <form method="POST" action="/onboarding">
+    <div class="card-title" style="margin-bottom:.5rem">Units</div>
+    <div class="form-group" style="margin-bottom:.75rem;">
+      <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+        <input type="radio" name="unit_pref" value="lb_in" {{if eq .UnitPref "lb_in"}}checked{{end}}>
+        <span>lb / in</span>
+      </label>
+    </div>
+    <div class="form-group" style="margin-bottom:1rem;">
+      <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+        <input type="radio" name="unit_pref" value="kg_cm" {{if eq .UnitPref "kg_cm"}}checked{{end}}>
+        <span>kg / cm</span>
+      </label>
+    </div>
+
+    <div class="card-subtitle" style="margin-bottom:.5rem">Distance Unit</div>
+    <div class="form-group" style="margin-bottom:.75rem;">
+      <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+        <input type="radio" name="distance_unit_pref" value="mi" {{if eq .DistanceUnitPref "mi"}}checked{{end}}>
+        <span>miles (mi)</span>
+      </label>
+    </div>
+    <div class="form-group" style="margin-bottom:1rem;">
+      <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+        <input type="radio" name="distance_unit_pref" value="km" {{if eq .DistanceUnitPref "km"}}checked{{end}}>
+        <span>kilometers (km)</span>
+      </label>
+    </div>
+
+    <div class="card-title" style="margin-bottom:.5rem">Starting Weights</div>
+    <div class="card-subtitle" style="margin-bottom:1rem;">You can fine-tune these later if needed.</div>
+
+    <div class="form-group">
+      <label for="squat">Squat</label>
+      <input id="squat" type="text" inputmode="decimal" name="squat" value="{{if .Squat}}{{.Squat}}{{else}}{{printf "%.1f" .DefSquat}}{{end}}" required>
+    </div>
+    <div class="form-group">
+      <label for="bench">Bench Press</label>
+      <input id="bench" type="text" inputmode="decimal" name="bench" value="{{if .Bench}}{{.Bench}}{{else}}{{printf "%.1f" .DefBench}}{{end}}" required>
+    </div>
+    <div class="form-group">
+      <label for="row">Barbell Row</label>
+      <input id="row" type="text" inputmode="decimal" name="row" value="{{if .Row}}{{.Row}}{{else}}{{printf "%.1f" .DefRow}}{{end}}" required>
+    </div>
+    <div class="form-group">
+      <label for="press">Shoulder Press</label>
+      <input id="press" type="text" inputmode="decimal" name="press" value="{{if .Press}}{{.Press}}{{else}}{{printf "%.1f" .DefPress}}{{end}}" required>
+    </div>
+    <div class="form-group">
+      <label for="deadlift">Deadlift</label>
+      <input id="deadlift" type="text" inputmode="decimal" name="deadlift" value="{{if .Deadlift}}{{.Deadlift}}{{else}}{{printf "%.1f" .DefDead}}{{end}}" required>
+    </div>
+
+    <button class="btn btn-primary" type="submit">Start Training</button>
+  </form>
+</div>
+{{end}}

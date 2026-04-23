@@ -1,0 +1,433 @@
+{{define "base"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{block "title" .}}Stronglifts{{end}}</title>
+  <script src="https://unpkg.com/htmx.org@1.9.10" integrity="sha384-D1Kt99CQMDuVetoL1lrYwg5t+9QdHe7NLX/SoJYkXDFfX37iInKRy5ViYgSibmK" crossorigin="anonymous"></script>
+  <script>
+    (function() {
+      try {
+        var theme = localStorage.getItem('smolt-theme') || 'light';
+        if (['light', 'dark'].indexOf(theme) === -1) {
+          theme = 'light';
+        }
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (_) {}
+    })();
+  </script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #f5f7fb;
+      --surface:   #ffffff;
+      --border:    #d8dfeb;
+      --accent:    #2f6fed;
+      --accent-dim:#1d56c6;
+      --green:     #16a34a;
+      --red:       #dc2626;
+      --yellow:    #ca8a04;
+      --text:      #0f172a;
+      --muted:     #55627a;
+      --radius:    12px;
+    }
+
+    html[data-theme="light"] {
+      --bg:        #f5f7fb;
+      --surface:   #ffffff;
+      --border:    #d8dfeb;
+      --accent:    #2f6fed;
+      --accent-dim:#1d56c6;
+      --green:     #16a34a;
+      --red:       #dc2626;
+      --yellow:    #ca8a04;
+      --text:      #0f172a;
+      --muted:     #55627a;
+    }
+
+    html[data-theme="dark"] {
+      --bg:        #0f1117;
+      --surface:   #1c1f2e;
+      --border:    #2a2d3e;
+      --accent:    #6c63ff;
+      --accent-dim:#4b44cc;
+      --green:     #22c55e;
+      --red:       #ef4444;
+      --yellow:    #f59e0b;
+      --text:      #e2e8f0;
+      --muted:     #94a3b8;
+    }
+
+
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 16px;
+      min-height: 100dvh;
+    }
+
+    /* ---- Nav ---- */
+    nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    nav .logo {
+      font-weight: 700;
+      font-size: 1.1rem;
+      letter-spacing: .04em;
+      color: var(--text);
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+    }
+    nav .logo span { color: var(--accent); }
+    nav .nav-actions { display: flex; gap: .75rem; align-items: center; }
+    nav .username { color: var(--muted); font-size: .875rem; }
+    .theme-wrap { position: relative; }
+    .theme-menu {
+      position: absolute;
+      right: 0;
+      top: calc(100% + .4rem);
+      min-width: 180px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 10px 30px #00000022;
+      padding: .4rem;
+      z-index: 20;
+    }
+    .theme-option {
+      width: 100%;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text);
+      text-align: left;
+      border-radius: 8px;
+      padding: .45rem .6rem;
+      cursor: pointer;
+      font-size: .85rem;
+    }
+    .theme-option:hover { background: var(--bg); border-color: var(--border); }
+    .theme-option.active { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+    .theme-divider { height: 1px; background: var(--border); margin: .3rem 0; }
+
+    /* ---- Buttons ---- */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: .55rem 1.25rem; border-radius: 8px;
+      font-size: .9rem; font-weight: 600; cursor: pointer; border: none;
+      transition: opacity .15s, transform .1s;
+      text-decoration: none;
+    }
+    .btn:active { transform: scale(.97); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-dim); }
+    .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+    .btn-ghost:hover { color: var(--text); border-color: var(--muted); }
+    .btn-sm { padding: .35rem .9rem; font-size: .8rem; }
+    .btn-danger { background: var(--red); color: #fff; }
+    .btn-success { background: var(--green); color: #000; font-weight: 700; }
+
+    /* ---- Page layout ---- */
+    .page { max-width: 640px; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
+
+    /* ---- Cards ---- */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .card-title { font-weight: 700; font-size: 1rem; margin-bottom: .25rem; }
+    .card-subtitle { color: var(--muted); font-size: .85rem; }
+
+    /* ---- Badge ---- */
+    .badge {
+      display: inline-block;
+      padding: .2rem .65rem; border-radius: 999px;
+      font-size: .75rem; font-weight: 600;
+    }
+    .badge-a { background: #6c63ff33; color: var(--accent); }
+    .badge-b { background: #22c55e22; color: var(--green); }
+
+    /* ---- Exercise list in dashboard ---- */
+    .exercise-list { list-style: none; margin-top: 1rem; display: flex; flex-direction: column; gap: .5rem; }
+    .exercise-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: .75rem 1rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .exercise-name { font-weight: 600; font-size: .95rem; }
+    .exercise-weight { color: var(--accent); font-weight: 700; font-size: 1rem; }
+
+    /* ---- Set bubbles ---- */
+    .sets-grid {
+      display: flex; gap: .6rem; flex-wrap: wrap;
+      margin-top: 1rem;
+    }
+    .set-bubble {
+      width: 52px; height: 52px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: .85rem;
+      cursor: pointer;
+      border: 2px solid var(--border);
+      background: var(--bg);
+      color: var(--muted);
+      transition: background .15s, border-color .15s, color .15s, transform .1s;
+      user-select: none;
+    }
+    .set-bubble:hover { border-color: var(--accent); color: var(--text); }
+    .set-bubble.complete { background: var(--green); border-color: var(--green); color: #000; }
+    .set-bubble.failed  { background: var(--red);   border-color: var(--red);   color: #fff; }
+    .set-bubble:active  { transform: scale(.93); }
+
+    /* ---- Rest timer ---- */
+    #rest-timer {
+      position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
+      background: var(--surface); border: 1px solid var(--accent);
+      border-radius: 999px; padding: .6rem 1.5rem;
+      display: flex; align-items: center; gap: .75rem;
+      font-weight: 700; font-size: 1rem;
+      box-shadow: 0 4px 24px #0006;
+      display: none;
+    }
+    #rest-timer.visible { display: flex; }
+    #timer-count { font-size: 1.4rem; color: var(--accent); min-width: 2.5ch; text-align: center; }
+
+    /* ---- Exercise section in workout ---- */
+    .workout-exercise { margin-bottom: 2rem; }
+    .workout-exercise-header {
+      display: flex; align-items: baseline; justify-content: space-between;
+      margin-bottom: .5rem;
+    }
+    .workout-exercise-name { font-weight: 700; font-size: 1.05rem; }
+    .workout-exercise-weight { color: var(--accent); font-weight: 700; }
+
+    /* ---- Forms (auth) ---- */
+    .form-card { max-width: 360px; margin: 3rem auto; }
+    .form-group { display: flex; flex-direction: column; gap: .4rem; margin-bottom: 1rem; }
+    label { font-size: .85rem; color: var(--muted); }
+    input[type=text], input[type=password] {
+      background: var(--bg); color: var(--text);
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: .65rem .9rem; font-size: 1rem;
+      width: 100%;
+    }
+    input:focus { outline: none; border-color: var(--accent); }
+    .form-error { color: var(--red); font-size: .85rem; margin-bottom: .75rem; }
+    .form-footer { text-align: center; margin-top: 1rem; color: var(--muted); font-size: .85rem; }
+    .form-footer a { color: var(--accent); text-decoration: none; }
+
+    /* ---- Alerts ---- */
+    .alert { padding: .75rem 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: .9rem; }
+    .alert-success { background: #22c55e22; border: 1px solid #22c55e55; color: var(--green); }
+    .alert-error   { background: #ef444422; border: 1px solid #ef444455; color: var(--red); }
+
+    /* ---- Progress bar (for rest timer) ---- */
+    .timer-bar-wrap { width: 160px; height: 5px; background: var(--border); border-radius: 3px; }
+    .timer-bar { height: 100%; background: var(--accent); border-radius: 3px; transition: width .5s linear; }
+
+    /* ---- HTMX loading indicator ---- */
+    .htmx-indicator { opacity: 0; transition: opacity 0.2s; }
+    .htmx-request .htmx-indicator { opacity: 1; }
+    .spinner {
+      width: 18px; height: 18px; border-radius: 50%;
+      border: 2px solid var(--border); border-top-color: var(--accent);
+      animation: spin .6s linear infinite; display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ---- Responsive ---- */
+    @media (max-width: 480px) {
+      .card { padding: 1rem; }
+      .set-bubble { width: 46px; height: 46px; font-size: .8rem; }
+    }
+
+    @media (max-width: 768px) {
+      .theme-wrap { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <a class="logo" href="/"><span>Smolt</span>5X5</a>
+    <div class="nav-actions">
+      <div class="theme-wrap">
+        <button class="btn btn-ghost btn-sm" id="theme-button" type="button" aria-haspopup="menu" aria-expanded="false">Theme</button>
+        <div id="theme-menu" class="theme-menu" hidden>
+          <button type="button" class="theme-option" data-theme-value="light">Light</button>
+          <button type="button" class="theme-option" data-theme-value="dark">Dark</button>
+        </div>
+      </div>
+      {{if .User}}
+        <a class="btn btn-ghost btn-sm" href="/profile">Profile</a>
+        <form method="POST" action="/logout" style="margin:0">
+          <button class="btn btn-ghost btn-sm" type="submit">Logout</button>
+        </form>
+      {{end}}
+    </div>
+  </nav>
+
+  <main class="page">
+    {{block "content" .}}{{end}}
+  </main>
+
+  <script>
+    (function() {
+      var key = 'smolt-theme';
+      var menu = document.getElementById('theme-menu');
+      var button = document.getElementById('theme-button');
+      var validThemes = ['light', 'dark'];
+
+      function storedTheme() {
+        var theme = localStorage.getItem(key) || 'light';
+        if (validThemes.indexOf(theme) === -1) return 'light';
+        return theme;
+      }
+
+      function markActive(theme) {
+        if (!menu) return;
+        var options = menu.querySelectorAll('[data-theme-value]');
+        options.forEach(function(opt) {
+          if (opt.getAttribute('data-theme-value') === theme) {
+            opt.classList.add('active');
+          } else {
+            opt.classList.remove('active');
+          }
+        });
+      }
+
+      function apply(theme) {
+        if (validThemes.indexOf(theme) === -1) {
+          theme = 'light';
+        }
+        localStorage.setItem(key, theme);
+        document.documentElement.setAttribute('data-theme', theme);
+        markActive(theme);
+      }
+
+      function closeMenu() {
+        if (!menu || !button) return;
+        menu.hidden = true;
+        button.setAttribute('aria-expanded', 'false');
+      }
+
+      function toggleMenu() {
+        if (!menu || !button) return;
+        var willOpen = menu.hidden;
+        menu.hidden = !willOpen;
+        button.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+      }
+
+      if (button) {
+        button.addEventListener('click', function() {
+          toggleMenu();
+        });
+      }
+
+      document.addEventListener('click', function(e) {
+        if (menu && button && !menu.hidden && !menu.contains(e.target) && !button.contains(e.target)) {
+          closeMenu();
+        }
+      });
+
+      if (menu) {
+        menu.querySelectorAll('[data-theme-value]').forEach(function(opt) {
+          opt.addEventListener('click', function() {
+            apply(opt.getAttribute('data-theme-value'));
+            closeMenu();
+          });
+        });
+      }
+
+      apply(storedTheme());
+
+      window.smoltThemeApi = {
+        setTheme: apply,
+        getTheme: storedTheme,
+      };
+    })();
+
+    (function() {
+      function typeFromExerciseName(name) {
+        if (name === 'Treadmill') return 'treadmill';
+        if (name === 'Exercise Bike') return 'bike';
+        if (name === 'Staircase') return 'staircase';
+        if (name === 'Elliptical') return 'elliptical';
+        return '';
+      }
+
+      function exerciseNameFromType(type) {
+        if (type === 'treadmill') return 'Treadmill';
+        if (type === 'bike') return 'Exercise Bike';
+        if (type === 'staircase') return 'Staircase';
+        if (type === 'elliptical') return 'Elliptical';
+        return 'Cardio';
+      }
+
+      function defaultsForType(type, distanceUnit) {
+        var defaults = {
+          timeMinutes: 10,
+          distanceDisplay: 0,
+          usesDistance: false
+        };
+
+        if (type === 'treadmill') {
+          defaults.timeMinutes = 10;
+          defaults.distanceDisplay = distanceUnit === 'km' ? 1.5 : 1.0;
+          defaults.usesDistance = true;
+        } else if (type === 'bike') {
+          defaults.timeMinutes = 20;
+          defaults.distanceDisplay = distanceUnit === 'km' ? 5.0 : 3.0;
+          defaults.usesDistance = true;
+        } else if (type === 'staircase') {
+          defaults.timeMinutes = 12;
+        } else if (type === 'elliptical') {
+          defaults.timeMinutes = 15;
+        }
+
+        return defaults;
+      }
+
+      function helperText(type, distanceUnit) {
+        if (type === 'treadmill') {
+          return 'Suggested default: 10 min and ' + (distanceUnit === 'km' ? '1.5 km' : '1.0 mi') + '. Pace updates live.';
+        }
+        if (type === 'bike') {
+          return 'Suggested default: 20 min and ' + (distanceUnit === 'km' ? '5.0 km' : '3.0 mi') + '.';
+        }
+        if (type === 'staircase') {
+          return 'Suggested default: 12 min duration-focused cardio.';
+        }
+        if (type === 'elliptical') {
+          return 'Suggested default: 15 min steady-state cardio.';
+        }
+        return '';
+      }
+
+      window.smoltCardio = {
+        typeFromExerciseName: typeFromExerciseName,
+        exerciseNameFromType: exerciseNameFromType,
+        defaultsForType: defaultsForType,
+        defaultsForExerciseName: function(name, distanceUnit) {
+          return defaultsForType(typeFromExerciseName(name), distanceUnit);
+        },
+        helperText: helperText
+      };
+    })();
+  </script>
+
+  {{block "scripts" .}}{{end}}
+</body>
+</html>{{end}}

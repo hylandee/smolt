@@ -1,0 +1,1721 @@
+{{template "base" .}}
+
+{{define "title"}}Workout {{.Session.ProgramName}} — SL5×5{{end}}
+
+{{define "content"}}
+<style>
+  .workout-timer {
+    position: sticky;
+    top: 4.25rem;
+    width: 100%;
+    z-index: 10;
+    padding: .6rem 1rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: .75rem;
+    font-weight: 800;
+    border-bottom: 1px solid var(--border);
+  }
+  .workout-timer-label { font-size: .85rem; opacity: .95; }
+  .workout-timer-count { font-size: 1.2rem; letter-spacing: .03em; min-width: 5ch; text-align: center; }
+  .workout-timer.state-green { background: #22c55e; color: #06210f; }
+  .workout-timer.state-yellow { background: #facc15; color: #3a2c00; }
+  .workout-timer.state-red { background: #ef4444; color: #fff; }
+  .workout-timer.flash { animation: timer-flash 1s ease-in-out infinite; }
+  @keyframes timer-flash {
+    0% { opacity: 1; }
+    35% { opacity: .72; }
+    65% { opacity: .72; }
+    100% { opacity: 1; }
+  }
+
+  .track-grid { display:grid; grid-template-columns:1fr 1fr; gap:.6rem; align-items:end; }
+  .track-input, .track-select {
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: .55rem .75rem;
+    width: 100%;
+    font-size: .95rem;
+  }
+  .reps-tap {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    padding: .55rem .75rem;
+    width: 100%;
+    text-align: center;
+    font-weight: 700;
+  }
+  .reps-tap.complete {
+    background: var(--green);
+    border-color: var(--green);
+    color: #000;
+  }
+  .reps-tap.failed {
+    background: var(--red);
+    border-color: var(--red);
+    color: #fff;
+  }
+  .workout-exercise-header.toggle {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+    color: var(--text);
+  }
+  .workout-exercise.collapsed .workout-exercise-body {
+    display: none;
+  }
+  .workout-exercise.collapsed .workout-exercise-weight,
+  .workout-exercise.collapsed .workout-exercise-status {
+    display: none;
+  }
+  .workout-exercise {
+    transition: box-shadow .28s ease, transform .28s ease;
+  }
+  .workout-exercise.just-added {
+    animation: exercise-added-flash 1.1s ease-out;
+  }
+  @keyframes exercise-added-flash {
+    0% {
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--green) 50%, transparent);
+      transform: translateY(4px);
+    }
+    30% {
+      box-shadow: 0 0 0 10px color-mix(in srgb, var(--green) 22%, transparent);
+      transform: translateY(0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--green) 0%, transparent);
+      transform: translateY(0);
+    }
+  }
+  .workout-exercise.dragging {
+    opacity: .6;
+  }
+  .workout-exercise.drop-target {
+    outline: 2px dashed var(--border);
+    outline-offset: 3px;
+  }
+  .exercise-drop-placeholder {
+    height: 12px;
+    border: 2px dashed color-mix(in srgb, var(--green) 50%, var(--border));
+    border-radius: 999px;
+    margin: .35rem 0;
+    background: color-mix(in srgb, var(--green) 14%, transparent);
+  }
+  .workout-exercise-top {
+    display: flex;
+    gap: .5rem;
+    align-items: flex-start;
+  }
+  .workout-exercise-name {
+    color: var(--text);
+  }
+  .workout-exercise-actions {
+    display: flex;
+    align-items: center;
+    gap: .35rem;
+    margin-top: .05rem;
+  }
+  .exercise-action-btn {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    border-radius: 8px;
+    padding: .3rem .45rem;
+    font-size: .8rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .exercise-action-btn.delete {
+    color: var(--red);
+    border-color: color-mix(in srgb, var(--red) 30%, var(--border));
+    white-space: nowrap;
+    min-width: 72px;
+  }
+  .exercise-drag-handle {
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    padding: .25rem .45rem;
+    color: var(--muted);
+    font-weight: 700;
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+  }
+  .workout-exercise-body {
+    opacity: 1;
+    max-height: 900px;
+    overflow: hidden;
+    transition: max-height .32s ease, opacity .28s ease;
+  }
+  .workout-exercise.collapsed .workout-exercise-body {
+    opacity: 0;
+    max-height: 0;
+  }
+  .add-exercise-panel.collapsed .add-exercise-body {
+    display: none;
+  }
+  .add-exercise-toggle {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 1rem;
+  }
+  .add-exercise-chevron {
+    color: var(--muted);
+    transition: transform .3s ease;
+  }
+  .add-exercise-panel:not(.collapsed) .add-exercise-chevron {
+    transform: rotate(180deg);
+  }
+  .set-row { display:grid; grid-template-columns: 58px 1fr 1fr auto; gap:.5rem; align-items:center; margin-bottom:.5rem; }
+  .set-row.cardio-row { grid-template-columns: 58px 1fr auto; align-items:start; }
+  .set-delete-btn {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--muted);
+    border-radius: 8px;
+    padding: .42rem .55rem;
+    font-size: .78rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .set-delete-btn.pending-delete {
+    color: var(--red);
+    border-color: color-mix(in srgb, var(--red) 32%, var(--border));
+  }
+  .cardio-entry {
+    grid-column: 2 / span 1;
+    display: grid;
+    gap: .5rem;
+    padding: .55rem .7rem;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--surface) 86%, transparent);
+  }
+  .cardio-entry-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+    gap: .4rem;
+    align-items: center;
+  }
+  .cardio-entry-fields.single-metric {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .input-with-unit {
+    display: flex;
+    align-items: center;
+    gap: .35rem;
+  }
+  .input-with-unit .track-input {
+    flex: 1;
+  }
+  .cardio-confirm {
+    min-width: 88px;
+    padding: .55rem .8rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    font-weight: 700;
+  }
+  .cardio-confirm.is-complete {
+    background: var(--green);
+    border-color: var(--green);
+    color: #000;
+  }
+  .cardio-validation {
+    color: var(--red);
+    font-size: .84rem;
+    line-height: 1.3;
+    min-height: 1.1rem;
+  }
+  .cardio-helper {
+    color: var(--muted);
+    font-size: .83rem;
+    line-height: 1.35;
+  }
+  .track-input.input-error {
+    border-color: var(--red);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--red) 45%, transparent);
+  }
+  .value-with-unit {
+    display: inline;
+  }
+  .value-unit {
+    opacity: 0.8;
+    font-size: 0.9em;
+    margin-left: 0.2em;
+  }
+  .pace-display {
+    font-weight: 600;
+    color: var(--text);
+    margin-top: 0.25rem;
+    font-size: 0.9rem;
+  }
+  .autosave-status {
+    min-width: 150px;
+    text-align: right;
+    white-space: nowrap;
+  }
+  .workout-actions {
+    display: flex;
+    gap: .5rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .save-button {
+    min-width: 72px;
+  }
+  .complete-workout-footer {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 1rem;
+  }
+  @media (max-width: 560px) {
+    .workout-timer {
+      padding: .7rem .5rem;
+      justify-content: space-between;
+    }
+    .set-row { grid-template-columns: 1fr 1fr auto; }
+    .set-row .set-label { grid-column: 1 / span 3; }
+    .set-row.cardio-row { grid-template-columns: 1fr; }
+    .cardio-entry { grid-column: 1 / span 1; }
+    .cardio-entry-fields,
+    .cardio-entry-fields.single-metric { grid-template-columns: 1fr; }
+    .autosave-status { width: 100%; text-align: left; }
+  }
+</style>
+
+<div id="workout-timer" class="workout-timer state-green" aria-live="polite">
+  <span class="workout-timer-label">Rest Timer</span>
+  <span id="workout-timer-count" class="workout-timer-count">00:00</span>
+</div>
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;gap:.6rem;flex-wrap:wrap;margin-top:.6rem;">
+  <h2 style="font-weight:700;font-size:1.25rem;display:flex;align-items:center;gap:.45rem;">
+    Workout
+    <span class="badge {{if eq .Session.ProgramName "A"}}badge-a{{else if eq .Session.ProgramName "B"}}badge-b{{else}}badge-a{{end}}">
+      {{.Session.ProgramName}}
+    </span>
+    {{if .Session.Finished}}<span class="card-subtitle" style="font-size:.8rem;">Completed (editable)</span>{{end}}
+  </h2>
+  <div class="workout-actions">
+    <button class="btn btn-ghost btn-sm save-button" type="button" id="save-workout-btn">Save</button>
+    <span id="autosave-status" class="card-subtitle autosave-status">Autosaved: --</span>
+    <button
+      class="btn btn-ghost btn-sm"
+      hx-delete="/workout/{{.Session.ID}}"
+      hx-confirm="Delete this workout?"
+      hx-target="body"
+      hx-push-url="/">
+      Delete
+    </button>
+  </div>
+</div>
+
+<div id="tracking-root">
+{{range $idx, $exercise := .Session.Exercises}}
+  {{$exName := $exercise.Name}}
+  <div class="card workout-exercise" data-exercise-card data-exercise="{{$exercise.Name}}" data-exercise-index="{{$exercise.Index}}" draggable="true">
+    <div class="workout-exercise-top">
+      <button class="workout-exercise-header toggle" type="button" data-exercise-toggle>
+      <span class="workout-exercise-name">{{$exercise.Name}}</span>
+      <span class="workout-exercise-weight">{{printf "%.1f" $exercise.Weight}} {{$.WeightUnit}}</span>
+      <span class="card-subtitle workout-exercise-status" data-exercise-status></span>
+      </button>
+      <div class="workout-exercise-actions">
+        <button type="button" class="exercise-action-btn" data-move-up title="Move up">↑</button>
+        <button type="button" class="exercise-action-btn" data-move-down title="Move down">↓</button>
+        <button type="button" class="exercise-action-btn" data-add-set title="Add set">+ Set</button>
+        <button type="button" class="exercise-action-btn delete" data-delete-exercise title="Delete exercise">Delete</button>
+        <span class="exercise-drag-handle" data-drag-handle title="Drag to reorder">⋮⋮</span>
+      </div>
+    </div>
+    <div class="workout-exercise-body" data-exercise-body>
+    {{range $exercise.Sets}}
+      <div class="set-row{{if or (eq $exName "Treadmill") (eq $exName "Exercise Bike") (eq $exName "Staircase") (eq $exName "Elliptical")}} cardio-row{{end}}" data-set-row data-set-number="{{.Number}}" data-target="{{.TargetReps}}" data-completed="{{if .Completed}}true{{else}}false{{end}}">
+        <div class="set-label">Set {{.LocalNumber}}</div>
+        {{if or (eq $exName "Treadmill") (eq $exName "Exercise Bike") (eq $exName "Staircase") (eq $exName "Elliptical")}}
+        <div class="cardio-entry">
+          <div class="cardio-entry-fields{{if or (eq $exName "Staircase") (eq $exName "Elliptical")}} single-metric{{end}}">
+            <div class="input-with-unit">
+              <input class="track-input" type="text" data-reps-input value="{{if gt .ActualReps 0}}{{.ActualReps}}{{else}}{{.TargetReps}}{{end}}" inputmode="numeric" placeholder="Minutes">
+              <span class="value-unit">min</span>
+            </div>
+            {{if or (eq $exName "Treadmill") (eq $exName "Exercise Bike")}}
+            <div class="input-with-unit">
+              <input class="track-input" type="text" data-weight-input value="{{printf "%.1f" .Weight}}" inputmode="decimal" placeholder="Distance">
+              <span class="value-unit">{{$.DistanceUnit}}</span>
+            </div>
+            {{else}}
+            <input class="track-input" type="text" data-weight-input value="0" inputmode="decimal" style="display:none;">
+            {{end}}
+            <button type="button" class="cardio-confirm{{if .Completed}} is-complete{{end}}" data-cardio-confirm>{{if .Completed}}Logged{{else}}Log Set{{end}}</button>
+          </div>
+          <div class="cardio-helper" data-cardio-helper></div>
+          <div class="cardio-validation" data-cardio-validation></div>
+          {{if eq $exName "Treadmill"}}<div class="pace-display" data-pace-display>--:-- min/mi</div>{{end}}
+        </div>
+        <button type="button" class="set-delete-btn" data-delete-set>Delete Set</button>
+        {{else}}
+        <button type="button" class="reps-tap{{if .Completed}}{{if lt .ActualReps .TargetReps}} failed{{else}} complete{{end}}{{end}}" data-reps-btn>{{if gt .ActualReps 0}}{{.ActualReps}}{{else}}{{.TargetReps}}{{end}}</button>
+        <div style="display: flex; align-items: center; gap: .3rem;">
+          <input class="track-input" type="text" data-weight-input value="{{printf "%.1f" .Weight}}" inputmode="decimal" placeholder="Weight" style="flex:1;">
+          <span class="value-unit">{{$.WeightUnit}}</span>
+        </div>
+        <button type="button" class="set-delete-btn" data-delete-set>Delete Set</button>
+        {{end}}
+      </div>
+    {{end}}
+    </div>
+  </div>
+{{end}}
+</div>
+
+<div class="card add-exercise-panel collapsed" id="add-exercise-panel" style="margin-top:1rem;">
+  <button type="button" class="add-exercise-toggle" id="add-exercise-toggle">
+    <span>Add Exercise</span>
+    <span class="add-exercise-chevron">▾</span>
+  </button>
+
+  <div class="add-exercise-body" style="margin-top:.75rem;">
+    <div class="track-grid">
+      <div class="form-group" style="margin-bottom:0;">
+        <label>Exercise Type</label>
+        <select id="add-type" class="track-select">
+          <option value="strength">Strength</option>
+          <option value="cardio">Cardio</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom:0;">
+        <label>Exercise</label>
+        <select id="add-exercise" class="track-select">
+          <option>Squat</option>
+          <option>Bench Press</option>
+          <option>Barbell Row</option>
+          <option>OHP</option>
+          <option>Deadlift</option>
+        </select>
+      </div>
+      <div class="form-group" id="add-sets-wrap" style="margin-bottom:0;">
+        <label>Sets (strength)</label>
+        <input id="add-sets" class="track-input" type="text" value="5" inputmode="numeric">
+      </div>
+      <div class="form-group" id="add-target-wrap" style="margin-bottom:0;">
+        <label id="add-target-label">Reps</label>
+        <input id="add-target" class="track-input" type="text" value="5" inputmode="numeric">
+      </div>
+      <div class="form-group" id="add-weight-wrap" style="margin-bottom:0;">
+        <label id="add-weight-label">Weight ({{.WeightUnit}})</label>
+        <input id="add-weight" class="track-input" type="text" value="0" inputmode="decimal">
+      </div>
+      <div style="display:flex;align-items:end;">
+        <button type="button" class="btn btn-primary" id="add-exercise-btn">Add</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="complete-workout-footer">
+  <button class="btn btn-success" type="button" id="complete-workout-btn">Complete Workout</button>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+  (function() {
+    var sessionID = {{.Session.ID}};
+    var weightUnit = '{{.WeightUnit}}';
+    var distanceUnit = '{{.DistanceUnit}}';
+    var timerEl = document.getElementById('workout-timer');
+    var timerCountEl = document.getElementById('workout-timer-count');
+    var secondsSinceComplete = 0;
+    var timerInterval = null;
+    var pendingCollapseTimers = {};
+    var autosaveTimer = null;
+    var autosaveInFlight = false;
+    var autosaveQueued = false;
+    var lastSavedPayload = '';
+    var autosaveStatusEl = document.getElementById('autosave-status');
+    var pendingSetDeletes = {};
+    var pendingExerciseDeletes = new WeakMap();
+
+    function milesToDisplayDistance(miles) {
+      var v = Number(miles) || 0;
+      if (distanceUnit === 'km') return Math.round(v * 1.60934 * 100) / 100;
+      return v;
+    }
+
+    function displayDistanceToMiles(distanceValue) {
+      var v = Number(distanceValue) || 0;
+      if (distanceUnit === 'km') return Math.round((v / 1.60934) * 100) / 100;
+      return v;
+    }
+
+    function isCardioDistanceRow(row) {
+      if (!row) return false;
+      var card = row.closest('[data-exercise-card]');
+      if (!card) return false;
+      var exerciseName = card.getAttribute('data-exercise') || '';
+      return exerciseName === 'Treadmill' || exerciseName === 'Exercise Bike';
+    }
+
+    function formatSeconds(total) {
+      var mins = Math.floor(total / 60);
+      var secs = total % 60;
+      return String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+    }
+
+    function paintTimer() {
+      if (!timerEl || !timerCountEl) return;
+      var shownSeconds = Math.min(secondsSinceComplete, 600);
+      timerCountEl.textContent = formatSeconds(shownSeconds);
+      timerEl.classList.remove('state-green', 'state-yellow', 'state-red', 'flash');
+      if (shownSeconds <= 150) {
+        timerEl.classList.add('state-green');
+      } else if (shownSeconds <= 180) {
+        timerEl.classList.add('state-yellow');
+      } else {
+        timerEl.classList.add('state-red', 'flash');
+      }
+    }
+
+    function startTimer() {
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = setInterval(function() {
+        if (secondsSinceComplete >= 600) {
+          secondsSinceComplete = 600;
+          paintTimer();
+          clearInterval(timerInterval);
+          timerInterval = null;
+          return;
+        }
+        secondsSinceComplete += 1;
+        paintTimer();
+      }, 1000);
+      paintTimer();
+    }
+
+    function resetTimer() {
+      secondsSinceComplete = 0;
+      paintTimer();
+    }
+
+    function clearPendingCollapse(card) {
+      if (!card) return;
+      var cardIndex = card.getAttribute('data-exercise-index') || '';
+      if (!cardIndex) return;
+      if (pendingCollapseTimers[cardIndex]) {
+        clearTimeout(pendingCollapseTimers[cardIndex]);
+        delete pendingCollapseTimers[cardIndex];
+      }
+    }
+
+    function scheduleExerciseCollapse(card) {
+      if (!card) return;
+      var cardIndex = card.getAttribute('data-exercise-index') || '';
+      if (!cardIndex) return;
+
+      clearPendingCollapse(card);
+      pendingCollapseTimers[cardIndex] = setTimeout(function() {
+        var rows = card.querySelectorAll('[data-set-row]');
+        var completed = 0;
+        rows.forEach(function(row) {
+          if (row.getAttribute('data-completed') === 'true') completed += 1;
+        });
+        var allDone = rows.length > 0 && completed === rows.length;
+        if (!allDone) return;
+
+        var alreadyCollapsed = card.classList.contains('collapsed');
+        card.classList.add('collapsed');
+        if (!alreadyCollapsed) {
+          var nextCard = card.nextElementSibling;
+          while (nextCard && !nextCard.hasAttribute('data-exercise-card')) {
+            nextCard = nextCard.nextElementSibling;
+          }
+          if (nextCard) {
+            nextCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            setTimeout(function() {
+              window.scrollBy({ top: -80, left: 0, behavior: 'smooth' });
+            }, 180);
+          }
+        }
+
+        delete pendingCollapseTimers[cardIndex];
+      }, 900);
+    }
+
+    function setAutosaveStatus(text) {
+      if (!autosaveStatusEl) return;
+      autosaveStatusEl.textContent = text;
+    }
+
+    function syncExerciseWeightLabel(card, value) {
+      if (!card) return;
+      var weightLabel = card.querySelector('.workout-exercise-weight');
+      if (!weightLabel || value === '') return;
+      weightLabel.textContent = value + ' ' + weightUnit;
+    }
+
+    function propagateExerciseWeightFromFirstRow(card, sourceInput) {
+      if (!card || !sourceInput) return;
+      var rows = card.querySelectorAll('[data-set-row]');
+      if (!rows.length) return;
+      var firstWeightInput = rows[0].querySelector('[data-weight-input]');
+      if (!firstWeightInput || firstWeightInput !== sourceInput) return;
+
+      var oldDefault = card.getAttribute('data-default-weight');
+      if (oldDefault === null) {
+        oldDefault = sourceInput.value;
+      }
+      var nextValue = sourceInput.value;
+      for (var i = 1; i < rows.length; i++) {
+        var rowWeightInput = rows[i].querySelector('[data-weight-input]');
+        if (!rowWeightInput) continue;
+        if (rowWeightInput.value === oldDefault) {
+          rowWeightInput.value = nextValue;
+        }
+      }
+      card.setAttribute('data-default-weight', nextValue);
+      syncExerciseWeightLabel(card, nextValue);
+    }
+
+    function formatSavedTime(date) {
+      return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+    }
+
+    function updateExerciseCardState(card, autoCollapseWhenDone) {
+      if (!card) return;
+      var rows = card.querySelectorAll('[data-set-row]');
+      var status = card.querySelector('[data-exercise-status]');
+      var completed = 0;
+      rows.forEach(function(row) {
+        if (row.getAttribute('data-completed') === 'true') completed += 1;
+      });
+      var allDone = rows.length > 0 && completed === rows.length;
+      if (status) status.textContent = allDone ? 'Done' : (completed + '/' + rows.length + ' complete');
+      if (!allDone) {
+        clearPendingCollapse(card);
+      }
+      if (allDone && autoCollapseWhenDone) {
+        scheduleExerciseCollapse(card);
+      }
+    }
+
+    function collectSets() {
+      var rows = document.querySelectorAll('[data-set-row]');
+      var payload = [];
+      rows.forEach(function(row) {
+        var setNumber = Number(row.getAttribute('data-set-number'));
+        var target = Number(row.getAttribute('data-target')) || 5;
+        var repsButton = row.querySelector('[data-reps-btn]');
+        var repsInput = row.querySelector('[data-reps-input]');
+        var weightInput = row.querySelector('[data-weight-input]');
+        var completed = row.getAttribute('data-completed') === 'true';
+        var actual = target;
+        if (repsInput) {
+          actual = Number(repsInput.value);
+        } else if (repsButton) {
+          actual = Number(repsButton.textContent);
+        }
+        var weight = 0;
+        if (weightInput) {
+          weight = Number(weightInput.value);
+          if (isCardioDistanceRow(row)) {
+            weight = displayDistanceToMiles(weightInput.value);
+          }
+        }
+        payload.push({
+          setNumber: setNumber,
+          actualReps: actual,
+          weight: isNaN(weight) ? 0 : weight,
+          completed: completed
+        });
+      });
+      return payload;
+    }
+
+    function recalcCardSetLabels(card) {
+      if (!card) return;
+      var rows = card.querySelectorAll('[data-set-row]');
+      rows.forEach(function(row, idx) {
+        var label = row.querySelector('.set-label');
+        if (label) {
+          label.textContent = 'Set ' + String(idx + 1);
+        }
+      });
+      updateExerciseCardState(card, false);
+    }
+
+    function getExerciseIndex(card) {
+      if (!card) return 0;
+      return Number(card.getAttribute('data-exercise-index')) || 0;
+    }
+
+    function syncExerciseIndexes() {
+      var cards = document.querySelectorAll('[data-exercise-card]');
+      cards.forEach(function(card, idx) {
+        card.setAttribute('data-exercise-index', String(idx + 1));
+      });
+    }
+
+    function resequenceSetNumbersFromDom() {
+      var nextSetNumber = 1;
+      var cards = document.querySelectorAll('[data-exercise-card]');
+      cards.forEach(function(card) {
+        var rows = card.querySelectorAll('[data-set-row]');
+        rows.forEach(function(row) {
+          row.setAttribute('data-set-number', String(nextSetNumber));
+          var deleteBtn = row.querySelector('[data-delete-set]');
+          if (deleteBtn) {
+            deleteBtn.setAttribute('data-delete-set', String(nextSetNumber));
+          }
+          nextSetNumber += 1;
+        });
+        recalcCardSetLabels(card);
+      });
+    }
+
+    function resetSetRowState(row) {
+      if (!row) return;
+      var target = Number(row.getAttribute('data-target')) || 5;
+      row.setAttribute('data-completed', 'false');
+
+      var repsBtn = row.querySelector('[data-reps-btn]');
+      if (repsBtn) {
+        repsBtn.classList.remove('complete');
+        repsBtn.classList.remove('failed');
+        repsBtn.textContent = String(target);
+      }
+
+      var repsInput = row.querySelector('[data-reps-input]');
+      if (repsInput) {
+        repsInput.value = String(target);
+        repsInput.classList.remove('input-error');
+        repsInput.removeAttribute('aria-invalid');
+      }
+
+      var cardioConfirm = row.querySelector('[data-cardio-confirm]');
+      if (cardioConfirm) {
+        cardioConfirm.classList.remove('is-complete');
+        cardioConfirm.textContent = 'Log Set';
+      }
+
+      var validation = row.querySelector('[data-cardio-validation]');
+      if (validation) validation.textContent = '';
+
+      var deleteBtn = row.querySelector('[data-delete-set]');
+      if (deleteBtn) {
+        deleteBtn.classList.remove('pending-delete');
+        deleteBtn.textContent = 'Delete Set';
+      }
+    }
+
+    function bindSetRowInteractions(row) {
+      if (!row || row.getAttribute('data-row-bound') === 'true') return;
+      row.setAttribute('data-row-bound', 'true');
+
+      var cardioBtn = row.querySelector('[data-cardio-confirm]');
+      if (cardioBtn) {
+        cardioBtn.addEventListener('click', function() {
+          var card = cardioBtn.closest('[data-exercise-card]');
+          if (!card) return;
+          clearPendingCollapse(card);
+
+          var minsInput = row.querySelector('[data-reps-input]');
+          var distInput = row.querySelector('[data-weight-input]');
+          var exerciseName = card.getAttribute('data-exercise') || '';
+          var minutes = Number(minsInput && minsInput.value);
+          var distance = Number(distInput && distInput.value);
+          var completed = row.getAttribute('data-completed') === 'true';
+
+          if (completed) {
+            setCardioValidation(row, '');
+            setCardioConfirmState(row, false);
+            updateExerciseCardState(card, false);
+            queueAutosave();
+            return;
+          }
+
+          if (!minutes || minutes <= 0) {
+            setCardioValidation(row, 'Enter minutes to log this set.', minsInput);
+            if (minsInput) minsInput.focus();
+            return;
+          }
+          if ((exerciseName === 'Treadmill' || exerciseName === 'Exercise Bike') && (!distance || distance <= 0)) {
+            setCardioValidation(row, 'Enter distance to log this set.', distInput);
+            if (distInput) distInput.focus();
+            return;
+          }
+
+          setCardioValidation(row, '');
+          setCardioConfirmState(row, true);
+          resetTimer();
+          updatePaceDisplay(row);
+          updateExerciseCardState(card, true);
+          queueAutosave();
+        });
+      }
+
+      var repsBtn = row.querySelector('[data-reps-btn]');
+      if (repsBtn) {
+        repsBtn.addEventListener('click', function() {
+          var card = repsBtn.closest('[data-exercise-card]');
+          clearPendingCollapse(card);
+          var target = Number(row.getAttribute('data-target')) || 5;
+          var completed = row.getAttribute('data-completed') === 'true';
+          var current = Number(repsBtn.textContent);
+          if (isNaN(current)) current = target;
+
+          if (!completed) {
+            row.setAttribute('data-completed', 'true');
+            repsBtn.classList.remove('failed');
+            repsBtn.classList.add('complete');
+            repsBtn.textContent = String(target);
+            resetTimer();
+            updateExerciseCardState(card, true);
+            queueAutosave();
+            return;
+          }
+
+          if (current === 0) {
+            row.setAttribute('data-completed', 'false');
+            repsBtn.classList.remove('complete');
+            repsBtn.classList.remove('failed');
+            repsBtn.textContent = String(target);
+            updateExerciseCardState(card, false);
+            queueAutosave();
+            return;
+          }
+
+          current = current - 1;
+          if (current < 0) current = target;
+          repsBtn.textContent = String(current);
+          if (current < target) {
+            repsBtn.classList.remove('complete');
+            repsBtn.classList.add('failed');
+          } else {
+            repsBtn.classList.remove('failed');
+            repsBtn.classList.add('complete');
+          }
+          updateExerciseCardState(card, false);
+          queueAutosave();
+        });
+      }
+
+      var deleteBtn = row.querySelector('[data-delete-set]');
+      if (deleteBtn) {
+        deleteBtn.addEventListener('click', function() {
+          var card = deleteBtn.closest('[data-exercise-card]');
+          if (!card) return;
+          var setNumber = Number(row.getAttribute('data-set-number'));
+          if (!setNumber) return;
+
+          if (pendingSetDeletes[setNumber]) {
+            clearTimeout(pendingSetDeletes[setNumber].timer);
+            delete pendingSetDeletes[setNumber];
+            deleteBtn.classList.remove('pending-delete');
+            deleteBtn.textContent = 'Delete Set';
+            return;
+          }
+
+          deleteBtn.classList.add('pending-delete');
+          deleteBtn.textContent = 'Undo?';
+          pendingSetDeletes[setNumber] = {
+            timer: setTimeout(function() {
+              requestSetDelete(setNumber)
+                .then(function() {
+                  row.remove();
+                  recalcCardSetLabels(card);
+                  resequenceSetNumbersFromDom();
+                  queueAutosave();
+                })
+                .catch(function() {
+                  deleteBtn.textContent = 'Delete failed';
+                  setTimeout(function() {
+                    deleteBtn.textContent = 'Delete Set';
+                  }, 1200);
+                })
+                .finally(function() {
+                  deleteBtn.classList.remove('pending-delete');
+                  delete pendingSetDeletes[setNumber];
+                });
+            }, 2200)
+          };
+        });
+      }
+
+      row.querySelectorAll('[data-reps-input], [data-weight-input]').forEach(function(input) {
+        input.addEventListener('input', function() {
+          var card = input.closest('[data-exercise-card]');
+          if (row.querySelector('[data-cardio-confirm]')) {
+            setCardioValidation(row, '');
+            setCardioConfirmState(row, false);
+            updatePaceDisplay(row);
+            updateExerciseCardState(card, false);
+          }
+          queueAutosave();
+        });
+        input.addEventListener('change', function() {
+          var card = input.closest('[data-exercise-card]');
+          if (row.querySelector('[data-cardio-confirm]')) {
+            setCardioValidation(row, '');
+            setCardioConfirmState(row, false);
+            updatePaceDisplay(row);
+            updateExerciseCardState(card, false);
+          }
+          queueAutosave();
+        });
+      });
+    }
+
+    function appendSetRow(card) {
+      if (!card) return null;
+      var body = card.querySelector('[data-exercise-body]');
+      if (!body) return null;
+      var rows = body.querySelectorAll('[data-set-row]');
+      if (!rows.length) return null;
+
+      var templateRow = rows[rows.length - 1];
+      var newRow = templateRow.cloneNode(true);
+      var target = Number(templateRow.getAttribute('data-target')) || 5;
+      newRow.setAttribute('data-target', String(target));
+      newRow.setAttribute('data-set-number', String(rows.length + 1));
+      resetSetRowState(newRow);
+      body.appendChild(newRow);
+      bindSetRowInteractions(newRow);
+      recalcCardSetLabels(card);
+      resequenceSetNumbersFromDom();
+      if (distanceUnit === 'km' && isCardioDistanceRow(newRow)) {
+        var weightInput = newRow.querySelector('[data-weight-input]');
+        if (weightInput) {
+          weightInput.value = String(milesToDisplayDistance(weightInput.value));
+        }
+      }
+      updateCardioHelper(newRow);
+      updatePaceDisplay(newRow);
+      return newRow;
+    }
+
+    function appendLatestExerciseCardFromServer() {
+      return fetch('/workout/' + sessionID)
+        .then(function(resp) {
+          if (!resp.ok) throw new Error('reload source failed');
+          return resp.text();
+        })
+        .then(function(html) {
+          var parser = new DOMParser();
+          var doc = parser.parseFromString(html, 'text/html');
+          var serverCards = doc.querySelectorAll('[data-exercise-card]');
+          if (!serverCards.length) throw new Error('no exercise card in response');
+          var sourceCard = serverCards[serverCards.length - 1];
+          var newCard = document.importNode(sourceCard, true);
+          if (!trackingRoot) throw new Error('tracking root missing');
+          trackingRoot.appendChild(newCard);
+          bindExerciseCardInteractions(newCard);
+          bindExerciseDragInteractions(newCard);
+          syncExerciseIndexes();
+          resequenceSetNumbersFromDom();
+
+          newCard.querySelectorAll('[data-set-row]').forEach(function(row) {
+            if (distanceUnit === 'km' && isCardioDistanceRow(row)) {
+              var weightInput = row.querySelector('[data-weight-input]');
+              if (weightInput) {
+                weightInput.value = String(milesToDisplayDistance(weightInput.value));
+              }
+            }
+            updateCardioHelper(row);
+            updatePaceDisplay(row);
+          });
+
+          newCard.classList.add('just-added');
+          setTimeout(function() {
+            newCard.classList.remove('just-added');
+          }, 1200);
+
+          newCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    }
+
+    function hasIncomplete(payload) {
+      for (var i = 0; i < payload.length; i++) {
+        if (!payload[i].completed) return true;
+      }
+      return false;
+    }
+
+    function postJSON(url, body, method) {
+      return fetch(url, {
+        method: method || 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+    }
+
+    function requestSetDelete(setNumber) {
+      return fetch('/workout/' + sessionID + '/set/' + setNumber, { method: 'DELETE' })
+        .then(function(resp) {
+          if (!resp.ok) throw new Error('delete set failed');
+        });
+    }
+
+    function queueAutosave() {
+      if (autosaveTimer) clearTimeout(autosaveTimer);
+      setAutosaveStatus('Autosave: pending...');
+      autosaveTimer = setTimeout(function() {
+        autosaveTimer = null;
+        saveTracking(false);
+      }, 700);
+    }
+
+    function saveTracking(showSavedState) {
+      var payload = { sets: collectSets() };
+      var payloadStr = JSON.stringify(payload);
+      if (!showSavedState && payloadStr === lastSavedPayload && !autosaveQueued) {
+        return Promise.resolve();
+      }
+
+      if (autosaveInFlight) {
+        autosaveQueued = true;
+        return Promise.resolve();
+      }
+
+      autosaveInFlight = true;
+      setAutosaveStatus('Autosave: saving...');
+      return postJSON('/workout/' + sessionID + '/save', payload)
+        .then(function(resp) {
+          if (!resp.ok) throw new Error('save failed');
+          lastSavedPayload = payloadStr;
+          autosaveQueued = false;
+          setAutosaveStatus('Autosaved: ' + formatSavedTime(new Date()));
+          if (showSavedState) {
+            setAutosaveStatus('Autosaved: ' + formatSavedTime(new Date()));
+          }
+        })
+        .catch(function() {
+          setAutosaveStatus('Autosave: failed');
+          if (showSavedState) {
+            alert('Failed to save workout state.');
+          }
+        })
+        .finally(function() {
+          autosaveInFlight = false;
+          if (autosaveQueued) {
+            autosaveQueued = false;
+            saveTracking(false);
+          }
+        });
+    }
+
+    function flushTrackingOnLeave() {
+      var payload = { sets: collectSets() };
+      var payloadStr = JSON.stringify(payload);
+      if (payloadStr === lastSavedPayload) return;
+
+      if (navigator.sendBeacon) {
+        var blob = new Blob([payloadStr], { type: 'application/json' });
+        navigator.sendBeacon('/workout/' + sessionID + '/save', blob);
+        lastSavedPayload = payloadStr;
+        setAutosaveStatus('Autosaved: ' + formatSavedTime(new Date()));
+        return;
+      }
+
+      fetch('/workout/' + sessionID + '/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payloadStr,
+        keepalive: true
+      });
+      lastSavedPayload = payloadStr;
+      setAutosaveStatus('Autosaved: ' + formatSavedTime(new Date()));
+    }
+
+    function updatePaceDisplay(row) {
+      var card = row.closest('[data-exercise-card]');
+      if (!card) return;
+      var exerciseName = card.getAttribute('data-exercise') || '';
+      if (exerciseName !== 'Treadmill') return;
+      var minsInput = row.querySelector('[data-reps-input]');
+      var distInput = row.querySelector('[data-weight-input]');
+      var paceDisplay = row.querySelector('[data-pace-display]');
+      if (!minsInput || !distInput || !paceDisplay) return;
+      var mins = Number(minsInput.value) || 0;
+      var distDisplay = Number(distInput.value) || 0;
+      var dist = displayDistanceToMiles(distDisplay);
+      if (dist > 0 && mins > 0) {
+        var pace = mins / dist;
+        var paceMin = Math.floor(pace);
+        var paceSec = Math.round((pace - paceMin) * 60);
+        if (paceSec === 60) {
+          paceMin += 1;
+          paceSec = 0;
+        }
+        paceDisplay.textContent = String(paceMin).padStart(2, '0') + ':' + String(paceSec).padStart(2, '0') + ' min/mi';
+      } else {
+        paceDisplay.textContent = '--:-- min/mi';
+      }
+    }
+
+    function setCardioConfirmState(row, completed) {
+      if (!row) return;
+      var button = row.querySelector('[data-cardio-confirm]');
+      if (!button) return;
+      row.setAttribute('data-completed', completed ? 'true' : 'false');
+      button.classList.toggle('is-complete', completed);
+      button.textContent = completed ? 'Logged' : 'Log Set';
+    }
+
+    function setCardioValidation(row, message, invalidInput) {
+      if (!row) return;
+      var validation = row.querySelector('[data-cardio-validation]');
+      var minsInput = row.querySelector('[data-reps-input]');
+      var distInput = row.querySelector('[data-weight-input]');
+      if (validation) {
+        validation.textContent = message || '';
+      }
+      [minsInput, distInput].forEach(function(input) {
+        if (!input) return;
+        var isInvalid = !!message && input === invalidInput;
+        input.classList.toggle('input-error', isInvalid);
+        if (isInvalid) {
+          input.setAttribute('aria-invalid', 'true');
+        } else {
+          input.removeAttribute('aria-invalid');
+        }
+      });
+    }
+
+    document.querySelectorAll('[data-set-row]').forEach(function(row) {
+      bindSetRowInteractions(row);
+    });
+
+    function reorderExercise(fromIndex, toIndex) {
+      var cards = document.querySelectorAll('[data-exercise-card]');
+      if (toIndex < 1 || toIndex > cards.length) return Promise.resolve();
+      return postJSON('/workout/' + sessionID + '/exercise/reorder', {
+        from: fromIndex,
+        to: toIndex
+      }).then(function(resp) {
+        if (!resp.ok) throw new Error('reorder failed');
+
+        if (!trackingRoot) return;
+        var currentCards = Array.prototype.slice.call(document.querySelectorAll('[data-exercise-card]'));
+        var fromCard = null;
+        currentCards.forEach(function(c) {
+          if (getExerciseIndex(c) === fromIndex) fromCard = c;
+        });
+        if (!fromCard) return;
+
+        var orderedWithout = currentCards.filter(function(c) {
+          return c !== fromCard;
+        });
+        var insertAt = Math.max(0, Math.min(orderedWithout.length, toIndex - 1));
+
+        if (insertAt >= orderedWithout.length) {
+          trackingRoot.appendChild(fromCard);
+        } else {
+          trackingRoot.insertBefore(fromCard, orderedWithout[insertAt]);
+        }
+
+        syncExerciseIndexes();
+        resequenceSetNumbersFromDom();
+      });
+    }
+
+    function bindExerciseCardInteractions(card) {
+      if (!card || card.getAttribute('data-card-bound') === 'true') return;
+      card.setAttribute('data-card-bound', 'true');
+
+      var rows = card.querySelectorAll('[data-set-row]');
+      rows.forEach(function(row) {
+        bindSetRowInteractions(row);
+      });
+
+      if (rows.length) {
+        var firstWeightInput = rows[0].querySelector('[data-weight-input]');
+        if (firstWeightInput) {
+          card.setAttribute('data-default-weight', firstWeightInput.value);
+          firstWeightInput.addEventListener('input', function() {
+            propagateExerciseWeightFromFirstRow(card, firstWeightInput);
+            queueAutosave();
+          });
+          firstWeightInput.addEventListener('change', function() {
+            propagateExerciseWeightFromFirstRow(card, firstWeightInput);
+            queueAutosave();
+          });
+        }
+      }
+
+      var toggle = card.querySelector('[data-exercise-toggle]');
+      if (toggle) {
+        toggle.addEventListener('click', function() {
+          card.classList.toggle('collapsed');
+        });
+      }
+
+      var upBtn = card.querySelector('[data-move-up]');
+      var downBtn = card.querySelector('[data-move-down]');
+      var addSetBtn = card.querySelector('[data-add-set]');
+      var delBtn = card.querySelector('[data-delete-exercise]');
+
+      if (upBtn) {
+        upBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          var index = getExerciseIndex(card);
+          reorderExercise(index, index - 1).catch(function() { alert('Failed to reorder exercise.'); });
+        });
+      }
+
+      if (downBtn) {
+        downBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          var index = getExerciseIndex(card);
+          reorderExercise(index, index + 1).catch(function() { alert('Failed to reorder exercise.'); });
+        });
+      }
+
+      if (addSetBtn) {
+        addSetBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          var index = getExerciseIndex(card);
+          addSetBtn.disabled = true;
+          addSetBtn.textContent = 'Adding...';
+          fetch('/workout/' + sessionID + '/exercise/' + index + '/set/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: ''
+          })
+            .then(function(resp) {
+              if (!resp.ok) throw new Error('add set failed');
+              appendSetRow(card);
+              queueAutosave();
+              addSetBtn.disabled = false;
+              addSetBtn.textContent = '+ Set';
+            })
+            .catch(function() {
+              addSetBtn.disabled = false;
+              addSetBtn.textContent = 'Add failed';
+              setTimeout(function() {
+                addSetBtn.textContent = '+ Set';
+              }, 1200);
+            });
+        });
+      }
+
+      if (delBtn) {
+        delBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          if (delBtn.getAttribute('data-confirming-delete') !== 'true') {
+            delBtn.setAttribute('data-confirming-delete', 'true');
+            delBtn.textContent = 'u sure?';
+            setTimeout(function() {
+              if (delBtn.getAttribute('data-confirming-delete') === 'true') {
+                delBtn.removeAttribute('data-confirming-delete');
+                delBtn.textContent = 'Delete';
+              }
+            }, 2200);
+            return;
+          }
+
+          delBtn.removeAttribute('data-confirming-delete');
+          if (pendingExerciseDeletes.get(card)) {
+            clearTimeout(pendingExerciseDeletes.get(card).timer);
+            pendingExerciseDeletes.delete(card);
+            delBtn.classList.remove('pending-delete');
+            delBtn.textContent = 'Delete';
+            return;
+          }
+
+          delBtn.classList.add('pending-delete');
+          delBtn.textContent = 'Undo?';
+          pendingExerciseDeletes.set(card, {
+            timer: setTimeout(function() {
+              var index = getExerciseIndex(card);
+              fetch('/workout/' + sessionID + '/exercise/' + index, { method: 'DELETE' })
+                .then(function(resp) {
+                  if (!resp.ok) throw new Error('delete failed');
+                  card.remove();
+                  syncExerciseIndexes();
+                  resequenceSetNumbersFromDom();
+                  queueAutosave();
+                })
+                .catch(function() {
+                  delBtn.textContent = 'Delete failed';
+                  setTimeout(function() {
+                    delBtn.textContent = 'Delete';
+                  }, 1200);
+                })
+                .finally(function() {
+                  delBtn.classList.remove('pending-delete');
+                  pendingExerciseDeletes.delete(card);
+                });
+            }, 2200)
+          });
+        });
+      }
+      updateExerciseCardState(card, false);
+    }
+
+    document.querySelectorAll('[data-exercise-card]').forEach(function(card) {
+      bindExerciseCardInteractions(card);
+    });
+
+    var draggingCard = null;
+    var trackingRoot = document.getElementById('tracking-root');
+    var touchDragState = {
+      active: false,
+      card: null,
+      targetCard: null,
+      insertBefore: true,
+      holdTimer: null,
+      touchId: null
+    };
+    var dropPlaceholder = document.createElement('div');
+    dropPlaceholder.className = 'exercise-drop-placeholder';
+
+    function clearDropTargets() {
+      document.querySelectorAll('[data-exercise-card]').forEach(function(c) {
+        c.classList.remove('drop-target');
+      });
+    }
+
+    function clearTouchDrag() {
+      if (touchDragState.holdTimer) {
+        clearTimeout(touchDragState.holdTimer);
+        touchDragState.holdTimer = null;
+      }
+      if (touchDragState.card) {
+        touchDragState.card.classList.remove('dragging');
+      }
+      touchDragState.active = false;
+      touchDragState.card = null;
+      touchDragState.targetCard = null;
+      touchDragState.insertBefore = true;
+      touchDragState.touchId = null;
+      clearDropTargets();
+      if (dropPlaceholder.parentNode) {
+        dropPlaceholder.parentNode.removeChild(dropPlaceholder);
+      }
+    }
+
+    function findTouchById(touchList, id) {
+      if (!touchList) return null;
+      for (var i = 0; i < touchList.length; i++) {
+        if (touchList[i].identifier === id) return touchList[i];
+      }
+      return null;
+    }
+
+    function computeReorderIndex(fromIndex, targetIndex, insertBefore) {
+      if (insertBefore) {
+        return fromIndex < targetIndex ? targetIndex - 1 : targetIndex;
+      }
+      return fromIndex < targetIndex ? targetIndex : targetIndex + 1;
+    }
+
+    function updateTouchDropTarget(touch) {
+      if (!touchDragState.active || !touchDragState.card || !trackingRoot) return;
+      var hovered = document.elementFromPoint(touch.clientX, touch.clientY);
+      var targetCard = hovered && hovered.closest ? hovered.closest('[data-exercise-card]') : null;
+
+      clearDropTargets();
+      touchDragState.targetCard = null;
+      if (!targetCard || targetCard === touchDragState.card) {
+        if (dropPlaceholder.parentNode) {
+          dropPlaceholder.parentNode.removeChild(dropPlaceholder);
+        }
+        return;
+      }
+
+      targetCard.classList.add('drop-target');
+      touchDragState.targetCard = targetCard;
+      var rect = targetCard.getBoundingClientRect();
+      var insertBefore = touch.clientY < (rect.top + rect.height / 2);
+      touchDragState.insertBefore = insertBefore;
+
+      if (insertBefore) {
+        trackingRoot.insertBefore(dropPlaceholder, targetCard);
+      } else {
+        trackingRoot.insertBefore(dropPlaceholder, targetCard.nextSibling);
+      }
+    }
+
+    function bindExerciseDragInteractions(card) {
+      if (!card || card.getAttribute('data-drag-bound') === 'true') return;
+      card.setAttribute('data-drag-bound', 'true');
+
+      card.addEventListener('dragstart', function(e) {
+        draggingCard = card;
+        card.classList.add('dragging');
+        if (e.dataTransfer) {
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', card.getAttribute('data-exercise-index') || '');
+        }
+      });
+
+      card.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        if (draggingCard && draggingCard !== card) {
+          card.classList.add('drop-target');
+        }
+      });
+
+      card.addEventListener('dragleave', function() {
+        card.classList.remove('drop-target');
+      });
+
+      card.addEventListener('drop', function(e) {
+        e.preventDefault();
+        card.classList.remove('drop-target');
+        if (!draggingCard || draggingCard === card) return;
+        var fromIndex = Number(draggingCard.getAttribute('data-exercise-index'));
+        var toIndex = Number(card.getAttribute('data-exercise-index'));
+        reorderExercise(fromIndex, toIndex).catch(function() { alert('Failed to reorder exercise.'); });
+      });
+
+      card.addEventListener('dragend', function() {
+        card.classList.remove('dragging');
+        clearDropTargets();
+        draggingCard = null;
+      });
+
+      var handle = card.querySelector('[data-drag-handle]');
+      if (!handle) return;
+
+      handle.addEventListener('touchstart', function(e) {
+        if (!e.touches || e.touches.length === 0) return;
+        var firstTouch = e.touches[0];
+        touchDragState.touchId = firstTouch.identifier;
+        touchDragState.holdTimer = setTimeout(function() {
+          touchDragState.active = true;
+          touchDragState.card = card;
+          card.classList.add('dragging');
+        }, 260);
+      }, { passive: true });
+
+      handle.addEventListener('touchmove', function(e) {
+        var touch = findTouchById(e.touches, touchDragState.touchId);
+        if (!touch) return;
+
+        if (!touchDragState.active) {
+          return;
+        }
+
+        e.preventDefault();
+        updateTouchDropTarget(touch);
+      }, { passive: false });
+
+      handle.addEventListener('touchend', function(e) {
+        if (!touchDragState.active) {
+          clearTouchDrag();
+          return;
+        }
+
+        var source = touchDragState.card;
+        var target = touchDragState.targetCard;
+        var insertBefore = touchDragState.insertBefore;
+        var fromIndex = source ? Number(source.getAttribute('data-exercise-index')) : 0;
+        var targetIndex = target ? Number(target.getAttribute('data-exercise-index')) : 0;
+        var toIndex = computeReorderIndex(fromIndex, targetIndex, insertBefore);
+
+        clearTouchDrag();
+
+        if (!fromIndex || !targetIndex || fromIndex === toIndex) return;
+        reorderExercise(fromIndex, toIndex).catch(function() {
+          alert('Failed to reorder exercise.');
+        });
+      }, { passive: true });
+
+      handle.addEventListener('touchcancel', function() {
+        clearTouchDrag();
+      }, { passive: true });
+    }
+
+    document.querySelectorAll('[data-exercise-card]').forEach(function(card) {
+      bindExerciseDragInteractions(card);
+    });
+
+    document.querySelectorAll('[data-set-row]').forEach(function(row) {
+      if (!isCardioDistanceRow(row)) {
+        updatePaceDisplay(row);
+        return;
+      }
+      var weightInput = row.querySelector('[data-weight-input]');
+      if (!weightInput) return;
+      weightInput.value = String(milesToDisplayDistance(weightInput.value));
+      updatePaceDisplay(row);
+    });
+
+    startTimer();
+
+    var saveBtn = document.getElementById('save-workout-btn');
+    if (saveBtn) {
+      saveBtn.addEventListener('click', function() {
+        saveTracking(true);
+      });
+    }
+
+    var completeBtn = document.getElementById('complete-workout-btn');
+    if (completeBtn) {
+      completeBtn.addEventListener('click', function() {
+        if (autosaveTimer) {
+          clearTimeout(autosaveTimer);
+          autosaveTimer = null;
+        }
+        var sets = collectSets();
+        if (hasIncomplete(sets) && !confirm('Workout has incomplete sets. Complete anyway? Incomplete A/B workouts will not advance progression.')) {
+          return;
+        }
+        postJSON('/workout/' + sessionID + '/finish', { sets: sets })
+          .then(function(resp) {
+            if (!resp.ok) throw new Error('finish failed');
+            return resp.json();
+          })
+          .then(function(data) {
+            var finishedID = data && data.sessionId ? data.sessionId : sessionID;
+            window.location.href = '/?finished=' + encodeURIComponent(String(finishedID));
+          })
+          .catch(function() { alert('Failed to complete workout.'); });
+      });
+    }
+
+    lastSavedPayload = JSON.stringify({ sets: collectSets() });
+    setAutosaveStatus('Autosaved: now');
+
+    window.addEventListener('beforeunload', function() {
+      flushTrackingOnLeave();
+    });
+
+    document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState === 'hidden') {
+        flushTrackingOnLeave();
+      }
+    });
+
+    function syncAddExerciseByType() {
+      var typeSel = document.getElementById('add-type');
+      var exSel = document.getElementById('add-exercise');
+      var setsInput = document.getElementById('add-sets');
+      var targetInput = document.getElementById('add-target');
+      var weightInput = document.getElementById('add-weight');
+      var setsWrap = document.getElementById('add-sets-wrap');
+      var targetLabel = document.getElementById('add-target-label');
+      var weightLabel = document.getElementById('add-weight-label');
+      var weightWrap = document.getElementById('add-weight-wrap');
+      if (!typeSel || !exSel || !setsInput || !targetInput || !weightInput || !setsWrap || !targetLabel || !weightLabel || !weightWrap) return;
+
+      var t = typeSel.value;
+      var options = [];
+      if (t === 'strength') {
+        options = ['Squat', 'Bench Press', 'Barbell Row', 'OHP', 'Deadlift'];
+        setsWrap.style.display = 'block';
+        weightWrap.style.display = 'block';
+        targetLabel.textContent = 'Reps';
+        weightLabel.textContent = 'Weight (' + weightUnit + ')';
+        setsInput.value = '5';
+        targetInput.value = '5';
+        targetInput.placeholder = '5';
+        weightInput.value = '0';
+        weightInput.placeholder = '0';
+      } else {
+        options = ['Treadmill', 'Exercise Bike', 'Staircase', 'Elliptical'];
+        setsWrap.style.display = 'none';
+        targetLabel.textContent = 'Duration (minutes)';
+        weightLabel.textContent = 'Distance (' + distanceUnit + ')';
+        setsInput.value = '1';
+        targetInput.value = '10';
+        targetInput.placeholder = '10';
+        weightInput.value = '1';
+        weightInput.placeholder = distanceUnit === 'km' ? '1.5' : '1.0';
+      }
+
+      exSel.innerHTML = '';
+      options.forEach(function(name) {
+        var o = document.createElement('option');
+        o.value = name;
+        o.textContent = name;
+        exSel.appendChild(o);
+      });
+
+      if (t === 'cardio') {
+        syncCardioExerciseDefaults();
+      }
+    }
+
+    function updateCardioHelper(row) {
+      if (!row || !window.smoltCardio) return;
+      var card = row.closest('[data-exercise-card]');
+      var helper = row.querySelector('[data-cardio-helper]');
+      if (!card || !helper) return;
+      var exerciseName = card.getAttribute('data-exercise') || '';
+      helper.textContent = window.smoltCardio.helperText(window.smoltCardio.typeFromExerciseName(exerciseName), distanceUnit);
+    }
+
+    function syncCardioExerciseDefaults() {
+      var typeSel = document.getElementById('add-type');
+      var exSel = document.getElementById('add-exercise');
+      var setsInput = document.getElementById('add-sets');
+      var targetInput = document.getElementById('add-target');
+      var weightInput = document.getElementById('add-weight');
+      var weightWrap = document.getElementById('add-weight-wrap');
+      var weightLabel = document.getElementById('add-weight-label');
+      if (!typeSel || !exSel || !setsInput || !targetInput || !weightInput || !weightWrap || !weightLabel) return;
+      if (typeSel.value !== 'cardio') return;
+
+      var defaults = window.smoltCardio.defaultsForExerciseName(exSel.value, distanceUnit);
+      setsInput.value = '1';
+      targetInput.value = String(defaults.timeMinutes);
+      targetInput.placeholder = String(defaults.timeMinutes);
+
+      if (defaults.usesDistance) {
+        weightWrap.style.display = 'block';
+        weightLabel.textContent = 'Distance (' + distanceUnit + ')';
+        weightInput.value = String(defaults.distanceDisplay);
+        weightInput.placeholder = String(defaults.distanceDisplay);
+      } else {
+        weightWrap.style.display = 'none';
+        weightInput.value = '0';
+        weightInput.placeholder = '0';
+      }
+    }
+
+    var addType = document.getElementById('add-type');
+    var addSets = document.getElementById('add-sets');
+    var addTarget = document.getElementById('add-target');
+    var addWeight = document.getElementById('add-weight');
+    var addPanel = document.getElementById('add-exercise-panel');
+    var addToggle = document.getElementById('add-exercise-toggle');
+    var draftKey = 'smolt-workout-add-draft-' + String(sessionID);
+
+    function readAddExerciseDraft() {
+      try {
+        var raw = localStorage.getItem(draftKey);
+        if (!raw) return null;
+        return JSON.parse(raw);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    function saveAddExerciseDraft() {
+      if (!addType || !addExercise || !addSets || !addTarget || !addWeight) return;
+      try {
+        localStorage.setItem(draftKey, JSON.stringify({
+          type: addType.value,
+          exercise: addExercise.value,
+          sets: addSets.value,
+          target: addTarget.value,
+          weight: addWeight.value
+        }));
+      } catch (_) {}
+    }
+
+    function clearAddExerciseDraft() {
+      try {
+        localStorage.removeItem(draftKey);
+      } catch (_) {}
+    }
+    if (addToggle && addPanel) {
+      addToggle.addEventListener('click', function() {
+        addPanel.classList.toggle('collapsed');
+      });
+    }
+
+    if (addType) {
+      addType.addEventListener('change', syncAddExerciseByType);
+      syncAddExerciseByType();
+      addType.addEventListener('change', saveAddExerciseDraft);
+    }
+
+    var addExercise = document.getElementById('add-exercise');
+    if (addExercise) {
+      addExercise.addEventListener('change', syncCardioExerciseDefaults);
+      addExercise.addEventListener('change', saveAddExerciseDraft);
+    }
+
+    [addSets, addTarget, addWeight].forEach(function(input) {
+      if (!input) return;
+      input.addEventListener('input', saveAddExerciseDraft);
+      input.addEventListener('change', saveAddExerciseDraft);
+    });
+
+    var draft = readAddExerciseDraft();
+    if (draft && addType && addExercise && addSets && addTarget && addWeight) {
+      addType.value = draft.type || addType.value;
+      syncAddExerciseByType();
+      if (draft.exercise) {
+        var option = Array.prototype.find.call(addExercise.options, function(o) { return o.value === draft.exercise; });
+        if (option) addExercise.value = draft.exercise;
+      }
+      if (draft.sets) addSets.value = draft.sets;
+      if (draft.target) addTarget.value = draft.target;
+      if (draft.weight) addWeight.value = draft.weight;
+    }
+
+    var addBtn = document.getElementById('add-exercise-btn');
+    if (addBtn) {
+      addBtn.addEventListener('click', function() {
+        var typeSel = document.getElementById('add-type');
+        var exSel = document.getElementById('add-exercise');
+        var setsInput = document.getElementById('add-sets');
+        var targetInput = document.getElementById('add-target');
+        var weightInput = document.getElementById('add-weight');
+        if (!typeSel || !exSel || !setsInput || !targetInput || !weightInput) return;
+
+        var data = new URLSearchParams();
+        data.set('exercise_type', typeSel.value);
+        data.set('exercise_name', exSel.value);
+        data.set('sets', setsInput.value);
+        data.set('target_reps', targetInput.value);
+        data.set('weight', weightInput.value);
+        if (typeSel.value === 'cardio' && (exSel.value === 'Treadmill' || exSel.value === 'Exercise Bike')) {
+          data.set('time_minutes', targetInput.value);
+          data.set('distance_miles', String(displayDistanceToMiles(weightInput.value)));
+        } else if (typeSel.value === 'cardio') {
+          data.set('time_minutes', targetInput.value);
+        }
+
+        fetch('/workout/' + sessionID + '/exercise/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: data.toString()
+        }).then(function(resp) {
+          if (!resp.ok) throw new Error('add failed');
+          return appendLatestExerciseCardFromServer();
+        }).then(function() {
+          clearAddExerciseDraft();
+          queueAutosave();
+        }).catch(function() {
+          alert('Failed to add exercise.');
+        });
+      });
+    }
+
+    document.querySelectorAll('[data-set-row]').forEach(function(row) {
+      if (distanceUnit === 'km' && isCardioDistanceRow(row)) {
+        var weightInput = row.querySelector('[data-weight-input]');
+        if (weightInput) {
+          weightInput.value = String(milesToDisplayDistance(weightInput.value));
+        }
+      }
+      updateCardioHelper(row);
+      updatePaceDisplay(row);
+    });
+  })();
+</script>
+{{end}}

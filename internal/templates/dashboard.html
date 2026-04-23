@@ -1,0 +1,248 @@
+{{template "base" .}}
+
+{{define "title"}}Dashboard — SL5×5{{end}}
+
+{{define "content"}}
+<h2 style="font-weight:700;font-size:1.25rem;margin-bottom:1.25rem">Next Workout</h2>
+
+{{if .FinishSummary}}
+<div class="card" style="border-color:color-mix(in srgb, var(--green) 35%, var(--border));">
+  <div class="card-title" style="margin-bottom:.35rem;color:var(--green);">Workout Complete</div>
+  <div class="card-subtitle" style="margin-bottom:.8rem;">{{.FinishSummary.WorkoutName}} · {{.FinishSummary.CompletedSets}}/{{.FinishSummary.TotalSets}} sets completed</div>
+  <div style="display:grid;grid-template-columns:repeat(3, minmax(0,1fr));gap:.6rem;margin-bottom:.75rem;">
+    <div class="exercise-row" style="display:block;padding:.55rem .7rem;">
+      <div class="card-subtitle">Strength Volume</div>
+      <div class="exercise-weight">{{printf "%.0f" .FinishSummary.StrengthVolume}}</div>
+    </div>
+    <div class="exercise-row" style="display:block;padding:.55rem .7rem;">
+      <div class="card-subtitle">Cardio Time</div>
+      <div class="exercise-weight">{{.FinishSummary.CardioMinutes}} min</div>
+    </div>
+    <div class="exercise-row" style="display:block;padding:.55rem .7rem;">
+      <div class="card-subtitle">Cardio Distance</div>
+      <div class="exercise-weight">{{printf "%.2f" .FinishSummary.CardioMiles}} {{$.DistanceUnit}}</div>
+    </div>
+  </div>
+  {{if .FinishSummary.PersonalRecords}}
+  <div class="card-subtitle" style="margin-bottom:.25rem;">PR highlights</div>
+  <div style="display:flex;flex-wrap:wrap;gap:.35rem;">
+    {{range .FinishSummary.PersonalRecords}}
+    <span class="badge badge-b" style="background:color-mix(in srgb, var(--green) 22%, transparent);">{{.}}</span>
+    {{end}}
+  </div>
+  {{end}}
+</div>
+{{end}}
+
+<div class="card">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+    <div>
+      <div class="card-title" style="font-size:1.1rem">Workout
+        <span class="badge {{if eq .Plan.ProgramName "A"}}badge-a{{else}}badge-b{{end}}">
+          {{.Plan.ProgramName}}
+        </span>
+      </div>
+      <div class="card-subtitle">{{len .Plan.Exercises}} exercises · program set scheme</div>
+    </div>
+    <form method="POST" action="/workout/start" style="margin:0;">
+      <button class="btn btn-primary" type="submit">Start</button>
+    </form>
+  </div>
+
+  <div style="display:flex;justify-content:flex-end;margin-bottom:1rem;">
+    <a class="btn btn-ghost btn-sm" href="/workout/standalone/new">Standalone Workout Editor</a>
+    <a class="btn btn-ghost btn-sm" href="/progress/charts" style="margin-left:.5rem;">Progress Charts</a>
+  </div>
+
+  <ul class="exercise-list">
+    {{range .Plan.Exercises}}
+    <li class="exercise-row">
+      <span class="exercise-name">{{.Name}}</span>
+      <span class="exercise-weight">{{printf "%.1f" .Weight}} {{$.WeightUnit}}</span>
+    </li>
+    {{end}}
+  </ul>
+</div>
+
+<div class="card">
+  <div class="card-title" style="margin-bottom:.25rem">Pick A Workout</div>
+  <div class="card-subtitle" style="margin-bottom:1rem">Start Workout A, Workout B, or one of your saved standalone workouts.</div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;">
+    <div class="exercise-row" style="display:block;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;">
+        <span class="exercise-name">Workout A</span>
+        <form method="POST" action="/workout/start" style="margin:0;">
+          <input type="hidden" name="workout_type" value="program">
+          <input type="hidden" name="program_name" value="A">
+          <button class="btn btn-primary btn-sm" type="submit">Start A</button>
+        </form>
+      </div>
+      <div class="card-subtitle">{{len .PlanA.Exercises}} exercises</div>
+      <ul class="exercise-list" style="margin-top:.5rem;gap:.35rem;">
+        {{range .PlanA.Exercises}}
+        <li style="display:grid;grid-template-columns:1fr auto;gap:.5rem;align-items:center;">
+          <span>{{.Name}}</span>
+          <span class="exercise-weight">{{printf "%.1f" .Weight}} {{$.WeightUnit}}</span>
+          <div style="grid-column:1 / span 2;display:flex;gap:.45rem;flex-wrap:wrap;">
+            <form method="POST" action="/progress/{{.Name}}/deload" style="margin:0;">
+              <button class="btn btn-ghost btn-sm" type="submit">Deload 10%</button>
+            </form>
+            <form method="POST" action="/progress/{{.Name}}/skip-increment" style="margin:0;">
+              <input type="hidden" name="skip" value="1">
+              <button class="btn btn-ghost btn-sm" type="submit">Skip Next Increment</button>
+            </form>
+            <form method="POST" action="/progress/{{.Name}}/skip-increment" style="margin:0;">
+              <input type="hidden" name="skip" value="0">
+              <button class="btn btn-ghost btn-sm" type="submit">Clear Skip</button>
+            </form>
+          </div>
+        </li>
+        {{end}}
+      </ul>
+    </div>
+
+    <div class="exercise-row" style="display:block;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;">
+        <span class="exercise-name">Workout B</span>
+        <form method="POST" action="/workout/start" style="margin:0;">
+          <input type="hidden" name="workout_type" value="program">
+          <input type="hidden" name="program_name" value="B">
+          <button class="btn btn-primary btn-sm" type="submit">Start B</button>
+        </form>
+      </div>
+      <div class="card-subtitle">{{len .PlanB.Exercises}} exercises</div>
+      <ul class="exercise-list" style="margin-top:.5rem;gap:.35rem;">
+        {{range .PlanB.Exercises}}
+        <li style="display:grid;grid-template-columns:1fr auto;gap:.5rem;align-items:center;">
+          <span>{{.Name}}</span>
+          <span class="exercise-weight">{{printf "%.1f" .Weight}} {{$.WeightUnit}}</span>
+          <div style="grid-column:1 / span 2;display:flex;gap:.45rem;flex-wrap:wrap;">
+            <form method="POST" action="/progress/{{.Name}}/deload" style="margin:0;">
+              <button class="btn btn-ghost btn-sm" type="submit">Deload 10%</button>
+            </form>
+            <form method="POST" action="/progress/{{.Name}}/skip-increment" style="margin:0;">
+              <input type="hidden" name="skip" value="1">
+              <button class="btn btn-ghost btn-sm" type="submit">Skip Next Increment</button>
+            </form>
+            <form method="POST" action="/progress/{{.Name}}/skip-increment" style="margin:0;">
+              <input type="hidden" name="skip" value="0">
+              <button class="btn btn-ghost btn-sm" type="submit">Clear Skip</button>
+            </form>
+          </div>
+        </li>
+        {{end}}
+      </ul>
+    </div>
+  </div>
+
+  <div style="margin-top:1rem;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap;margin-bottom:.35rem;">
+      <div class="card-title" style="font-size:.95rem;">Saved Standalone Workouts</div>
+      {{if .StandaloneWorkouts}}
+      <form method="POST" action="/workout/standalone/delete-all" style="margin:0;">
+        <button class="btn btn-ghost btn-sm" type="submit" data-inline-confirm="u sure?" data-inline-timeout="2200" style="white-space:nowrap;min-width:72px;">Delete All</button>
+      </form>
+      {{end}}
+    </div>
+    {{if .StandaloneWorkouts}}
+      <ul class="exercise-list" style="margin-top:.5rem;">
+      {{range .StandaloneWorkouts}}
+        <li class="exercise-row" style="gap:.75rem;">
+          <div style="display:flex;flex-direction:column;gap:.15rem;">
+            <span class="exercise-name">{{if .Title}}{{.Title}}{{else}}Custom #{{.ID}}{{end}}</span>
+            <span class="card-subtitle">{{if .Notes}}{{.Notes}}{{else}}No notes{{end}} · {{.ItemCount}} items</span>
+          </div>
+          <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
+            <form method="POST" action="/workout/start" style="margin:0;">
+              <input type="hidden" name="workout_type" value="standalone">
+              <input type="hidden" name="standalone_id" value="{{.ID}}">
+              <button class="btn btn-primary btn-sm" type="submit">Start</button>
+            </form>
+            <a class="btn btn-ghost btn-sm" href="/workout/standalone/{{.ID}}/edit">Edit</a>
+            <form method="POST" action="/workout/standalone/{{.ID}}/delete" style="margin:0;">
+              <button class="btn btn-ghost btn-sm" type="submit" data-inline-confirm="u sure?" data-inline-timeout="2200" style="white-space:nowrap;min-width:72px;">Delete</button>
+            </form>
+          </div>
+        </li>
+      {{end}}
+      </ul>
+    {{else}}
+      <div class="card-subtitle" style="margin-top:.5rem;">No standalone workouts saved yet.</div>
+    {{end}}
+  </div>
+</div>
+
+<div class="card">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap;margin-bottom:.25rem;">
+    <div class="card-title">Recent Workouts</div>
+    {{if gt .OpenWorkoutCount 0}}
+    <form method="POST" action="/workout/finish-open" style="margin:0;">
+      <button class="btn btn-ghost btn-sm" type="submit">Complete All Open ({{.OpenWorkoutCount}})</button>
+    </form>
+    {{end}}
+  </div>
+  <div class="card-subtitle" style="margin-bottom:1rem;">Open any workout to resume or edit completed data.</div>
+  {{if .RecentSessions}}
+  <ul class="exercise-list" style="margin-top:.25rem;">
+    {{range .RecentSessions}}
+    <li class="exercise-row" style="gap:.75rem;">
+      <div style="display:flex;flex-direction:column;gap:.15rem;">
+        <span class="exercise-name">{{.WorkoutName}}</span>
+        <span class="card-subtitle">{{if .Finished}}Completed{{else}}In Progress{{end}} · {{.CreatedAt}}</span>
+      </div>
+      <a class="btn btn-ghost btn-sm" href="/workout/{{.ID}}">Open</a>
+    </li>
+    {{end}}
+  </ul>
+  {{if .PageLinks}}
+  <div style="display:flex;justify-content:center;align-items:center;gap:.5rem;margin-top:1rem;flex-wrap:wrap;">
+    {{range .PageLinks}}
+      {{if .Current}}
+      <span class="btn btn-sm" style="background:var(--accent);color:#fff;cursor:default;">{{.Number}}</span>
+      {{else}}
+      <a class="btn btn-ghost btn-sm" href="/?page={{.Number}}">{{.Number}}</a>
+      {{end}}
+    {{end}}
+  </div>
+  {{end}}
+  {{else}}
+  <div class="card-subtitle">No workouts yet.</div>
+  {{end}}
+</div>
+
+{{end}}
+
+{{define "scripts"}}
+<script>
+  (function() {
+    document.querySelectorAll('button[data-inline-confirm]').forEach(function(button) {
+      var confirmText = button.getAttribute('data-inline-confirm') || 'u sure?';
+      var timeoutMs = Number(button.getAttribute('data-inline-timeout')) || 2200;
+      var original = button.textContent;
+      var timer = null;
+
+      button.addEventListener('click', function(e) {
+        if (button.getAttribute('data-confirming') === 'true') {
+          button.removeAttribute('data-confirming');
+          if (timer) {
+            clearTimeout(timer);
+            timer = null;
+          }
+          return;
+        }
+
+        e.preventDefault();
+        button.setAttribute('data-confirming', 'true');
+        button.textContent = confirmText;
+
+        timer = setTimeout(function() {
+          button.removeAttribute('data-confirming');
+          button.textContent = original;
+          timer = null;
+        }, timeoutMs);
+      });
+    });
+  })();
+</script>
+{{end}}

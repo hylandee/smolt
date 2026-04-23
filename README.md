@@ -1,55 +1,29 @@
-# Smolt — StrongLifts 5×5 Workout Tracker
+# Smolt 5x5 - Go Backend
 
-A Rust full-stack web app built with [Leptos](https://leptos.dev/) (SSR),
-[Axum](https://docs.rs/axum), [SQLite](https://sqlite.org/) (via sqlx), and Serde.
+A self-hosted Stronglifts 5x5 workout tracker with Go backend, SQLite database, and HTMX frontend.
 
-## Features
-
-- **Workout A/B** (StrongLifts 5×5 templates)
-  - A: Squat 5×5, Bench Press 5×5, Barbell Row 5×5
-  - B: Squat 5×5, Overhead Press 5×5, Deadlift 1×5
-- Log working weight per lift, mark sets complete/failed
-- Body metrics log (bodyweight + notes)
-- Progress charts rendered as inline SVG (no JS charting library)
-- Server-side rendering with Leptos, hydrated in the browser
-
-## Environment Variables
-
-| Variable       | Default          | Description                                      |
-|----------------|------------------|--------------------------------------------------|
-| `HOST`         | `127.0.0.1`      | Bind address                                     |
-| `PORT`         | `3000`           | Bind port                                        |
-| `DATABASE_URL` | `sqlite:smolt.db`| SQLite URL. `DB_PATH` also accepted (path only). |
-| `RUST_LOG`     | `smolt=info`     | Log filter (tracing-subscriber env-filter)       |
-
-Create `.env` in the project root (loaded automatically on startup):
-
-```env
-HOST=127.0.0.1
-PORT=3000
-DATABASE_URL=sqlite:/var/data/smolt.db
-RUST_LOG=smolt=info,axum=info
-```
-
-## Running Locally
+## Quick Start
 
 ### Prerequisites
+- Go 1.21+
+
+### Build & Run
 
 ```bash
-rustup target add wasm32-unknown-unknown
-cargo install cargo-leptos
+# Download dependencies
+go mod download
+
+# Run the server
+go run ./cmd/stronglifts/main.go
 ```
 
-### Development (hot-reload)
-
-```bash
-cargo leptos watch
-# open http://127.0.0.1:3000
-```
+Server will start on `http://localhost:3000`
+>>>>>>> 5c2c635 (initial stuff)
 
 ### Tests
 
 ```bash
+<<<<<<< HEAD
 cargo test --features ssr
 ```
 
@@ -124,11 +98,22 @@ server {
         proxy_buffering    off;
     }
 }
+=======
+# Run all tests
+go test ./...
+
+# Run with verbose output
+go test -v ./...
+
+# Run specific test
+go test -run TestRegisterWithValidData ./internal/auth
+>>>>>>> 5c2c635 (initial stuff)
 ```
 
 ## Project Structure
 
 ```
+<<<<<<< HEAD
 smolt/
 ├── migrations/        SQLite migrations (run on startup)
 ├── public/            Static assets copied to target/site/
@@ -143,3 +128,65 @@ smolt/
 ├── style/main.scss    Dark-theme styles
 └── Cargo.toml
 ```
+=======
+cmd/
+  stronglifts/
+    main.go          # Entry point
+internal/
+  auth/
+    auth.go          # User registration/login logic
+    session.go       # Session management
+    middleware.go    # Auth middleware & context
+    auth_test.go     # Auth integration tests
+  db/
+    db.go            # Database initialization & schema
+  handlers/
+    auth.go          # HTTP handlers for auth routes
+migrations/          # SQL migrations (if needed)
+```
+
+## Architecture
+
+### Phase 1: Auth & DB (Current)
+- [x] User registration with validation
+- [x] Login with bcrypt password verification  
+- [x] Session-based authentication (30-day cookies)
+- [x] Protected routes with middleware
+- [x] SQLite schema (5 tables)
+- [x] Integration tests (11 tests)
+
+### Phase 2: Workout Engine (Next)
+- [ ] Exercise definitions (A/B program alternation)
+- [ ] Workout start/progress/finish endpoints
+- [ ] Linear progression (+increment on success)
+- [ ] Deload logic (-10% on 3 failures)
+- [ ] Integration tests
+
+### Phase 3-8: UI, History, Deployment
+- [ ] Dashboard with HTMX
+- [ ] Active workout UI (set bubbles, rest timer)
+- [ ] History & charts
+- [ ] Body metrics
+- [ ] Settings UI
+- [ ] Fat JAR build & systemd deployment
+
+## Database Schema
+
+- `users` - User accounts with bcrypt hashes
+- `workout_sessions` - Logged workouts (A/B programs)
+- `exercise_sets` - Individual sets within a session (5 sets per exercise)
+- `lift_progress` - Current weight & progression state per exercise
+- `body_metrics` - Weight tracking over time
+
+## API Endpoints
+
+### Auth
+- `POST /register` - Register new account
+- `GET /register` - Register form
+- `POST /login` - Login
+- `GET /login` - Login form
+- `POST /logout` - Clear session
+
+### Protected
+- `GET /` - Dashboard (requires auth)
+>>>>>>> 5c2c635 (initial stuff)
