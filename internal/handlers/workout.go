@@ -285,7 +285,7 @@ func (h *WorkoutHandlers) CreateStandaloneWorkout(w http.ResponseWriter, r *http
 		return
 	}
 
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.Redirect(w, r, "/workouts", http.StatusFound)
 }
 
 // UpdateStandaloneWorkout handles POST /workout/standalone/{id}
@@ -322,7 +322,7 @@ func (h *WorkoutHandlers) UpdateStandaloneWorkout(w http.ResponseWriter, r *http
 		return
 	}
 
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.Redirect(w, r, "/workouts", http.StatusFound)
 }
 
 // DeleteStandaloneWorkout handles POST /workout/standalone/{id}/delete
@@ -337,7 +337,7 @@ func (h *WorkoutHandlers) DeleteStandaloneWorkout(w http.ResponseWriter, r *http
 		http.Error(w, "Failed to delete standalone workout", http.StatusBadRequest)
 		return
 	}
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.Redirect(w, r, "/workouts", http.StatusFound)
 }
 
 // DeleteAllStandaloneWorkouts handles POST /workout/standalone/delete-all
@@ -347,7 +347,7 @@ func (h *WorkoutHandlers) DeleteAllStandaloneWorkouts(w http.ResponseWriter, r *
 		http.Error(w, "Failed to delete standalone workouts", http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.Redirect(w, r, "/workouts", http.StatusFound)
 }
 
 func (h *WorkoutHandlers) parseStandaloneItems(w http.ResponseWriter, r *http.Request, user *auth.UserSession, existing *workout.StandaloneWorkoutDetail, formAction, submitLabel string) ([]workout.StandaloneItemInput, bool) {
@@ -575,7 +575,7 @@ func (h *WorkoutHandlers) FinishWorkout(w http.ResponseWriter, r *http.Request) 
 	summary, _ := h.progression.SessionFinishSummary(r.Context(), user.UserID, sessionID)
 
 	if isHTMX(r) {
-		w.Header().Set("HX-Push-Url", "/")
+		w.Header().Set("HX-Push-Url", "/workouts")
 		h.renderDashboard(w, r, user)
 		return
 	}
@@ -768,7 +768,7 @@ func (h *WorkoutHandlers) DeloadExercise(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.Redirect(w, r, "/workouts", http.StatusFound)
 }
 
 // ToggleSkipIncrement handles POST /progress/{exercise}/skip-increment
@@ -792,7 +792,7 @@ func (h *WorkoutHandlers) ToggleSkipIncrement(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.Redirect(w, r, "/workouts", http.StatusFound)
 }
 
 // ExportBackup handles GET /backup/export.
@@ -861,7 +861,7 @@ func (h *WorkoutHandlers) FinishOpenWorkouts(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.Redirect(w, r, "/workouts", http.StatusFound)
 }
 
 // DeleteExercise removes a contiguous exercise block from a session.
@@ -994,7 +994,7 @@ func (h *WorkoutHandlers) DeleteWorkout(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if isHTMX(r) {
-		w.Header().Set("HX-Push-Url", "/")
+		w.Header().Set("HX-Push-Url", "/workouts")
 		h.renderDashboard(w, r, user)
 		return
 	}

@@ -211,7 +211,7 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 
 	writeSessionCookie(w, sessionID)
 
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.Redirect(w, r, "/workouts", http.StatusFound)
 }
 
 // Logout handles POST /logout
@@ -356,7 +356,7 @@ func (h *AuthHandlers) Onboarding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if initialized && r.Method == http.MethodGet {
-		http.Redirect(w, r, "/", http.StatusFound)
+		http.Redirect(w, r, "/workouts", http.StatusFound)
 		return
 	}
 
@@ -446,7 +446,7 @@ func (h *AuthHandlers) Onboarding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.Redirect(w, r, "/workouts", http.StatusFound)
 }
 
 // Dashboard handles GET /

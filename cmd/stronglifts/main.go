@@ -51,6 +51,7 @@ func main() {
 		r.Use(auth.SessionMiddleware(sessionStore))
 		r.Get("/onboarding", authHandlers.Onboarding)
 		r.Post("/onboarding", authHandlers.Onboarding)
+		r.Get("/workouts", authHandlers.Dashboard)
 		r.Get("/", authHandlers.Dashboard)
 		r.Get("/profile", authHandlers.Profile)
 		r.Post("/profile", authHandlers.Profile)

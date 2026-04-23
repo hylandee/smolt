@@ -221,8 +221,8 @@ func TestOnboardingSeedsStartingWeights(t *testing.T) {
 	if resp.StatusCode != http.StatusFound {
 		t.Fatalf("expected 302, got %d", resp.StatusCode)
 	}
-	if resp.Header.Get("Location") != "/" {
-		t.Fatalf("expected redirect to /, got %s", resp.Header.Get("Location"))
+	if resp.Header.Get("Location") != "/workouts" {
+		t.Fatalf("expected redirect to /workouts, got %s", resp.Header.Get("Location"))
 	}
 	resp.Body.Close()
 
@@ -412,8 +412,8 @@ func TestLoginWithValidCredentials(t *testing.T) {
 	if resp.StatusCode != http.StatusFound {
 		t.Errorf("expected 302, got %d", resp.StatusCode)
 	}
-	if resp.Header.Get("Location") != "/" {
-		t.Errorf("expected redirect to /, got %s", resp.Header.Get("Location"))
+	if resp.Header.Get("Location") != "/workouts" {
+		t.Errorf("expected redirect to /workouts, got %s", resp.Header.Get("Location"))
 	}
 }
 
