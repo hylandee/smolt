@@ -43,6 +43,7 @@ func (d *DB) CreateSchema() error {
 			password_hash TEXT NOT NULL,
 			unit_pref TEXT DEFAULT 'lb_in',
 			distance_unit_pref TEXT DEFAULT 'mi',
+			theme_pref TEXT DEFAULT 'light',
 			bar_weight REAL DEFAULT 20.0,
 			rest_timer INTEGER DEFAULT 90,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -156,6 +157,11 @@ func (d *DB) CreateSchema() error {
 			return fmt.Errorf("failed to ensure users.distance_unit_pref column: %w", err)
 		}
 	}
+	if _, err := d.conn.Exec(`ALTER TABLE users ADD COLUMN theme_pref TEXT DEFAULT 'light'`); err != nil {
+		if !strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
+			return fmt.Errorf("failed to ensure users.theme_pref column: %w", err)
+		}
+	}
 	if _, err := d.conn.Exec(`ALTER TABLE standalone_workouts ADD COLUMN title TEXT`); err != nil {
 		if !strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
 			return fmt.Errorf("failed to ensure standalone_workouts.title column: %w", err)
@@ -182,6 +188,24 @@ func (d *DB) CreateSchema() error {
 	}
 	if _, err := d.conn.Exec(`UPDATE users SET distance_unit_pref = CASE WHEN unit_pref = 'kg_cm' THEN 'km' ELSE 'mi' END WHERE lower(distance_unit_pref) NOT IN ('mi', 'km')`); err != nil {
 		return fmt.Errorf("failed to normalize distance unit preferences: %w", err)
+	}
+	if _, err := d.conn.Exec(`UPDATE users SET theme_pref = 'light' WHERE theme_pref IS NULL OR theme_pref = ''`); err != nil {
+		return fmt.Errorf("failed to migrate default theme preferences: %w", err)
+	}
+	if _, err := d.conn.Exec(`UPDATE users SET theme_pref = lower(theme_pref)`); err != nil {
+		return fmt.Errorf("failed to normalize theme preference casing: %w", err)
+	}
+	if _, err := d.conn.Exec(`UPDATE users SET theme_pref = 'dark_hc' WHERE theme_pref IN ('dark-hc', 'darkhc', 'high-contrast', 'high_contrast')`); err != nil {
+		return fmt.Errorf("failed to normalize high contrast theme preference: %w", err)
+	}
+	if _, err := d.conn.Exec(`UPDATE users SET theme_pref = 'peachpuff' WHERE theme_pref IN ('peach', 'vim-peachpuff')`); err != nil {
+		return fmt.Errorf("failed to normalize peachpuff theme preference: %w", err)
+	}
+	if _, err := d.conn.Exec(`UPDATE users SET theme_pref = 'default' WHERE theme_pref IN ('vim', 'vimdefault')`); err != nil {
+		return fmt.Errorf("failed to normalize default vim theme preference: %w", err)
+	}
+	if _, err := d.conn.Exec(`UPDATE users SET theme_pref = 'light' WHERE theme_pref NOT IN ('light', 'dark', 'forest', 'sunset', 'peachpuff', 'dark_hc', 'blue', 'darkblue', 'default', 'delek', 'desert', 'elflord', 'evening', 'habamax', 'industry', 'koehler', 'lunaperche', 'morning', 'murphy', 'pablo', 'quiet', 'retrobox', 'ron', 'shine', 'slate', 'sorbet', 'torte', 'wildcharm', 'zaibatsu', 'zellner')`); err != nil {
+		return fmt.Errorf("failed to normalize theme preference values: %w", err)
 	}
 
 	return nil

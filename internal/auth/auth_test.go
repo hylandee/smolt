@@ -752,6 +752,53 @@ func TestProfileRejectsInvalidUnitPreference(t *testing.T) {
 	}
 }
 
+func TestUpdateThemePreferenceToDarkHighContrast(t *testing.T) {
+	client, cleanup := newTestApp(t)
+	defer cleanup()
+
+	resp, _ := client.PostForm("http://app/register", url.Values{
+		"username": {"alice"},
+		"password": {"password123"},
+		"confirm":  {"password123"},
+	})
+	resp.Body.Close()
+
+	resp, _ = client.PostForm("http://app/login", url.Values{
+		"username": {"alice"},
+		"password": {"password123"},
+	})
+	cookie := resp.Header.Get("Set-Cookie")
+	resp.Body.Close()
+
+	req, _ := http.NewRequest("POST", "http://app/profile", strings.NewReader("unit_pref=lb_in&distance_unit_pref=mi&theme_pref=dark_hc"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	parts := strings.SplitN(cookie, ";", 2)
+	req.Header.Set("Cookie", parts[0])
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("POST /profile theme: %v", err)
+	}
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("expected 302, got %d", resp.StatusCode)
+	}
+	if resp.Header.Get("Location") != "/profile?settings_saved=1" {
+		t.Fatalf("expected redirect to /profile?settings_saved=1, got %s", resp.Header.Get("Location"))
+	}
+	resp.Body.Close()
+
+	req, _ = http.NewRequest("GET", "http://app/profile", nil)
+	req.Header.Set("Cookie", parts[0])
+	resp, err = client.Do(req)
+	if err != nil {
+		t.Fatalf("GET /profile after theme update: %v", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if !strings.Contains(string(body), `value="dark_hc" checked`) {
+		t.Fatalf("expected dark high contrast theme to be checked, body: %s", body)
+	}
+}
+
 func TestProfileUpdatesPassword(t *testing.T) {
 	client, cleanup := newTestApp(t)
 	defer cleanup()

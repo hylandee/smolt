@@ -7,6 +7,10 @@
   <a class="btn btn-ghost btn-sm" href="/workouts">Back to Workouts</a>
 </div>
 
+<div id="vim-toast" style="display:none;position:sticky;top:.75rem;z-index:30;margin-bottom:1rem;padding:.75rem 1rem;border:1px solid var(--accent);border-radius:10px;background:var(--surface);color:var(--text);box-shadow:0 12px 32px #0000001f;">
+  Vim mode unlocked.
+</div>
+
 <h2 style="font-weight:700;font-size:1.25rem;margin-bottom:1rem">Profile & Settings</h2>
 
 <div class="card">
@@ -53,6 +57,43 @@
         <input type="radio" name="distance_unit_pref" value="km" {{if eq .DistanceUnitPref "km"}}checked{{end}}>
         <span>kilometers (km)</span>
       </label>
+    </div>
+
+    <div class="card-subtitle" style="margin-bottom:.5rem">Theme</div>
+    <div class="form-group" style="margin-bottom:.75rem;">
+      <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+        <input type="radio" name="theme_pref" value="light" {{if eq .ThemePref "light"}}checked{{end}}>
+        <span>Light</span>
+      </label>
+    </div>
+    <div class="form-group" style="margin-bottom:.75rem;">
+      <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+        <input type="radio" name="theme_pref" value="dark" {{if eq .ThemePref "dark"}}checked{{end}}>
+        <span>Dark</span>
+      </label>
+    </div>
+    <div class="form-group" style="margin-bottom:.75rem;">
+      <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+        <input type="radio" name="theme_pref" value="forest" {{if eq .ThemePref "forest"}}checked{{end}}>
+        <span>Forest</span>
+      </label>
+    </div>
+    <div class="form-group" style="margin-bottom:.75rem;">
+      <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+        <input type="radio" name="theme_pref" value="sunset" {{if eq .ThemePref "sunset"}}checked{{end}}>
+        <span>Sunset</span>
+      </label>
+    </div>
+    <div class="form-group" style="margin-bottom:1rem;">
+      <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+        <input type="radio" name="theme_pref" value="dark_hc" {{if eq .ThemePref "dark_hc"}}checked{{end}}>
+        <span>Dark High Contrast</span>
+      </label>
+    </div>
+
+    <div id="vim-theme-wrap" style="display:none;border:1px dashed var(--border);border-radius:10px;padding:.8rem;margin:0 0 1rem;">
+      <div class="card-subtitle" style="margin-bottom:.5rem;">Vim colorschemes unlocked.</div>
+      <div id="vim-theme-options" style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem .8rem;"></div>
     </div>
 
     <button class="btn btn-primary" type="submit">Save Preferences</button>
@@ -116,4 +157,134 @@
 </div>
 {{end}}
 
-{{define "scripts"}}{{end}}
+{{define "scripts"}}
+<script>
+  (function() {
+    var key = 'smolt-theme';
+    var vimThemes = ['blue', 'darkblue', 'default', 'delek', 'desert', 'elflord', 'evening', 'habamax', 'industry', 'koehler', 'lunaperche', 'morning', 'murphy', 'pablo', 'peachpuff', 'quiet', 'retrobox', 'ron', 'shine', 'slate', 'sorbet', 'torte', 'wildcharm', 'zaibatsu', 'zellner'];
+    var validThemes = ['light', 'dark', 'forest', 'sunset', 'dark_hc'].concat(vimThemes);
+    var form = document.querySelector('form[action="/profile"] input[name="action"][value="units"]');
+    if (!form) return;
+    var prefsForm = form.closest('form');
+    if (!prefsForm) return;
+    var vimWrap = document.getElementById('vim-theme-wrap');
+    var vimOptions = document.getElementById('vim-theme-options');
+    var vimToast = document.getElementById('vim-toast');
+    var serverThemeInput = document.createElement('input');
+    serverThemeInput.type = 'hidden';
+    serverThemeInput.value = '{{.ThemePref}}';
+
+    function isVimTheme(theme) {
+      return vimThemes.indexOf(theme) !== -1;
+    }
+
+    function labelFromTheme(theme) {
+      if (theme === 'darkblue') return 'darkblue';
+      return theme;
+    }
+
+    function showToast() {
+      if (!vimToast) return;
+      vimToast.style.display = 'block';
+      window.clearTimeout(showToast._timer);
+      showToast._timer = window.setTimeout(function() {
+        vimToast.style.display = 'none';
+      }, 1800);
+    }
+
+    function revealVimThemes(showUnlockToast) {
+      if (!vimWrap || !vimOptions || vimOptions.children.length > 0) {
+        if (vimWrap) vimWrap.style.display = '';
+        if (showUnlockToast) showToast();
+        return;
+      }
+      vimWrap.style.display = '';
+      if (showUnlockToast) showToast();
+      var selected = prefsForm.querySelector('input[name="theme_pref"]:checked');
+      var selectedValue = selected ? selected.value : serverThemeInput.value;
+      vimThemes.forEach(function(themeName) {
+        var row = document.createElement('label');
+        row.style.display = 'flex';
+        row.style.alignItems = 'center';
+        row.style.gap = '.45rem';
+        row.style.cursor = 'pointer';
+
+        var radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = 'theme_pref';
+        radio.value = themeName;
+        if (themeName === selectedValue) {
+          radio.checked = true;
+        }
+
+        var text = document.createElement('span');
+        text.textContent = labelFromTheme(themeName);
+
+        row.appendChild(radio);
+        row.appendChild(text);
+        vimOptions.appendChild(row);
+
+        radio.addEventListener('change', function() {
+          if (radio.checked) {
+            applyTheme(radio.value);
+          }
+        });
+      });
+    }
+
+    function currentTheme() {
+      var t = localStorage.getItem(key) || 'light';
+      if (validThemes.indexOf(t) === -1) return 'light';
+      return t;
+    }
+
+    function applyTheme(theme) {
+      if (validThemes.indexOf(theme) === -1) theme = 'light';
+      localStorage.setItem(key, theme);
+      document.documentElement.setAttribute('data-theme', theme);
+      if (window.smoltThemeApi && typeof window.smoltThemeApi.setTheme === 'function') {
+        window.smoltThemeApi.setTheme(theme);
+      }
+      if (typeof window.smoltApplyThemePalette === 'function') {
+        window.smoltApplyThemePalette(theme);
+      }
+    }
+
+    var radios = prefsForm.querySelectorAll('input[name="theme_pref"]');
+    var stored = serverThemeInput.value || currentTheme();
+    radios.forEach(function(radio) {
+      if (radio.value === stored) {
+        radio.checked = true;
+      }
+      radio.addEventListener('change', function() {
+        if (radio.checked) {
+          applyTheme(radio.value);
+        }
+      });
+    });
+
+    if (isVimTheme(stored)) {
+      revealVimThemes(false);
+    }
+
+    var colonPressedAt = 0;
+    document.addEventListener('keydown', function(evt) {
+      if (evt.key === ':') {
+        colonPressedAt = Date.now();
+        return;
+      }
+      if (evt.key === 'Escape' && colonPressedAt > 0 && (Date.now() - colonPressedAt) < 2500) {
+        revealVimThemes(true);
+        colonPressedAt = 0;
+      }
+    });
+
+    prefsForm.addEventListener('submit', function() {
+      var selected = prefsForm.querySelector('input[name="theme_pref"]:checked');
+      if (selected) {
+        applyTheme(selected.value);
+      }
+    });
+  })();
+</script>
+{{end}}

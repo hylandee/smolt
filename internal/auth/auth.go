@@ -13,10 +13,16 @@ import (
 const bcryptCost = 12
 
 const (
-	UnitPrefMetric    = "kg_cm"
-	UnitPrefImperial  = "lb_in"
-	DistanceUnitMiles = "mi"
-	DistanceUnitKM    = "km"
+	UnitPrefMetric     = "kg_cm"
+	UnitPrefImperial   = "lb_in"
+	DistanceUnitMiles  = "mi"
+	DistanceUnitKM     = "km"
+	ThemePrefLight     = "light"
+	ThemePrefDark      = "dark"
+	ThemePrefForest    = "forest"
+	ThemePrefSunset    = "sunset"
+	ThemePrefPeachpuff = "peachpuff"
+	ThemePrefDarkHC    = "dark_hc"
 )
 
 var (
@@ -66,6 +72,27 @@ func normalizeDistanceUnitPref(distanceUnitPref string) (string, error) {
 		return DistanceUnitKM, nil
 	default:
 		return "", fmt.Errorf("invalid distance unit preference")
+	}
+}
+
+func normalizeThemePref(themePref string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(themePref)) {
+	case ThemePrefLight:
+		return ThemePrefLight, nil
+	case ThemePrefDark:
+		return ThemePrefDark, nil
+	case ThemePrefForest:
+		return ThemePrefForest, nil
+	case ThemePrefSunset:
+		return ThemePrefSunset, nil
+	case ThemePrefPeachpuff, "peach", "vim-peachpuff":
+		return ThemePrefPeachpuff, nil
+	case ThemePrefDarkHC, "dark-hc", "darkhc", "high-contrast", "high_contrast":
+		return ThemePrefDarkHC, nil
+	case "blue", "darkblue", "default", "delek", "desert", "elflord", "evening", "habamax", "industry", "koehler", "lunaperche", "morning", "murphy", "pablo", "quiet", "retrobox", "ron", "shine", "slate", "sorbet", "torte", "wildcharm", "zaibatsu", "zellner":
+		return strings.ToLower(strings.TrimSpace(themePref)), nil
+	default:
+		return "", fmt.Errorf("invalid theme preference")
 	}
 }
 
@@ -239,6 +266,56 @@ func (a *AuthService) UpdateDistanceUnitPref(ctx context.Context, userID int, di
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update distance unit preference: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to read update result: %w", err)
+	}
+	if affected == 0 {
+		return ErrUserNotFound
+	}
+
+	return nil
+}
+
+// GetThemePref returns the user's stored theme preference.
+func (a *AuthService) GetThemePref(ctx context.Context, userID int) (string, error) {
+	var themePref string
+	err := a.db.QueryRowContext(
+		ctx,
+		"SELECT COALESCE(theme_pref, ?) FROM users WHERE id = ? AND deleted_at IS NULL",
+		ThemePrefLight,
+		userID,
+	).Scan(&themePref)
+	if err == sql.ErrNoRows {
+		return "", ErrUserNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to query theme preference: %w", err)
+	}
+
+	normalized, err := normalizeThemePref(themePref)
+	if err != nil {
+		return ThemePrefLight, nil
+	}
+	return normalized, nil
+}
+
+// UpdateThemePref updates the user's theme preference.
+func (a *AuthService) UpdateThemePref(ctx context.Context, userID int, themePref string) error {
+	normalized, err := normalizeThemePref(themePref)
+	if err != nil {
+		return err
+	}
+
+	result, err := a.db.ExecContext(
+		ctx,
+		"UPDATE users SET theme_pref = ? WHERE id = ? AND deleted_at IS NULL",
+		normalized,
+		userID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update theme preference: %w", err)
 	}
 	affected, err := result.RowsAffected()
 	if err != nil {

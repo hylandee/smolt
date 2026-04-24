@@ -8,11 +8,65 @@
   <script>
     (function() {
       try {
-        var theme = localStorage.getItem('smolt-theme') || 'light';
-        if (['light', 'dark'].indexOf(theme) === -1) {
+        var key = 'smolt-theme';
+        var vimPalettes = {
+          blue:      {bg:'#0f233a',surface:'#12304e',border:'#2f4f6f',accent:'#5fa8ff',accentDim:'#3c82d9',green:'#8adf8a',red:'#ff7f7f',yellow:'#ffd27f',text:'#e8f2ff',muted:'#a7c1dd'},
+          darkblue:  {bg:'#0a1726',surface:'#10243a',border:'#29435f',accent:'#4f8fd8',accentDim:'#3a73b8',green:'#7bd68e',red:'#e47d7d',yellow:'#e0bd76',text:'#d7e6f6',muted:'#90a7bf'},
+          default:   {bg:'#f8f8f8',surface:'#ffffff',border:'#d8d8d8',accent:'#005f87',accentDim:'#00486a',green:'#2e7d32',red:'#b71c1c',yellow:'#a36a00',text:'#202020',muted:'#5f5f5f'},
+          delek:     {bg:'#121212',surface:'#1c1c1c',border:'#3a3a3a',accent:'#87afff',accentDim:'#5f87d7',green:'#87d787',red:'#d78787',yellow:'#d7af5f',text:'#e4e4e4',muted:'#b2b2b2'},
+          desert:    {bg:'#333333',surface:'#3f3f3f',border:'#5f5f5f',accent:'#ffd75f',accentDim:'#d7af5f',green:'#87af5f',red:'#d75f5f',yellow:'#d7af5f',text:'#f0e7d5',muted:'#c3b9a2'},
+          elflord:   {bg:'#202020',surface:'#2a2a2a',border:'#444444',accent:'#8cd0d3',accentDim:'#6ca9ac',green:'#7f9f7f',red:'#dca3a3',yellow:'#f0dfaf',text:'#dcdccc',muted:'#9faf9f'},
+          evening:   {bg:'#232526',surface:'#2f3133',border:'#50545a',accent:'#8ec7ff',accentDim:'#699fce',green:'#9fd39f',red:'#d78f8f',yellow:'#d7c38f',text:'#f0f0f0',muted:'#b8b8b8'},
+          habamax:   {bg:'#1f2430',surface:'#272d3a',border:'#434c5f',accent:'#7dcfff',accentDim:'#5ea8d6',green:'#98c379',red:'#e06c75',yellow:'#e5c07b',text:'#d8dee9',muted:'#9aa5b1'},
+          industry:  {bg:'#2b2b2b',surface:'#363636',border:'#4c4c4c',accent:'#87afd7',accentDim:'#5f87af',green:'#87af87',red:'#af5f5f',yellow:'#af875f',text:'#dddddd',muted:'#b0b0b0'},
+          koehler:   {bg:'#1b1b1b',surface:'#252525',border:'#3f3f3f',accent:'#87d7ff',accentDim:'#5fafd7',green:'#87d787',red:'#ff8787',yellow:'#ffd787',text:'#f0f0f0',muted:'#bfbfbf'},
+          lunaperche:{bg:'#2b1f2f',surface:'#3a2a40',border:'#5a4860',accent:'#f6c177',accentDim:'#d9a55d',green:'#9ccfd8',red:'#eb6f92',yellow:'#f6c177',text:'#f2e9e1',muted:'#c3b6ae'},
+          morning:   {bg:'#fffaf2',surface:'#ffffff',border:'#e8dcc8',accent:'#c65a00',accentDim:'#a34700',green:'#3f7f5f',red:'#af3a3a',yellow:'#a26b1f',text:'#3b2f2f',muted:'#7a6464'},
+          murphy:    {bg:'#2a2a2a',surface:'#343434',border:'#4f4f4f',accent:'#87afff',accentDim:'#5f87d7',green:'#5faf87',red:'#af5f5f',yellow:'#af875f',text:'#e6e6e6',muted:'#b8b8b8'},
+          pablo:     {bg:'#121212',surface:'#1c1c1c',border:'#383838',accent:'#5fafff',accentDim:'#3f8fd8',green:'#87af87',red:'#d78787',yellow:'#d7af5f',text:'#d7d7d7',muted:'#a8a8a8'},
+          peachpuff: {bg:'#fff0e0',surface:'#fff7ef',border:'#e7c6a5',accent:'#c46a2d',accentDim:'#9f5120',green:'#2f855a',red:'#c53030',yellow:'#b7791f',text:'#3b2412',muted:'#80563d'},
+          quiet:     {bg:'#111315',surface:'#171a1d',border:'#2e3338',accent:'#8ab4f8',accentDim:'#6d94d4',green:'#81c995',red:'#f28b82',yellow:'#fdd663',text:'#e8eaed',muted:'#9aa0a6'},
+          retrobox:  {bg:'#1f1a12',surface:'#2a2319',border:'#4c3f2d',accent:'#ffd787',accentDim:'#d7af5f',green:'#87af87',red:'#d78787',yellow:'#d7af5f',text:'#f4e8d0',muted:'#c3b9a0'},
+          ron:       {bg:'#1e1e1e',surface:'#282828',border:'#444444',accent:'#87afff',accentDim:'#5f87d7',green:'#87d787',red:'#d78787',yellow:'#d7af5f',text:'#e8e8e8',muted:'#b7b7b7'},
+          shine:     {bg:'#f9f9f9',surface:'#ffffff',border:'#d7d7d7',accent:'#005f87',accentDim:'#00486a',green:'#2f7f5f',red:'#af3f3f',yellow:'#a26b1f',text:'#262626',muted:'#606060'},
+          slate:     {bg:'#22282f',surface:'#2b333c',border:'#465463',accent:'#9ecbff',accentDim:'#78a5d6',green:'#8fcf9b',red:'#d99696',yellow:'#d9c18f',text:'#e7edf4',muted:'#b0bdc9'},
+          sorbet:    {bg:'#2b1d2f',surface:'#38263d',border:'#59455f',accent:'#ff9ecb',accentDim:'#d97da8',green:'#a6e3a1',red:'#f38ba8',yellow:'#f9e2af',text:'#f2e9f4',muted:'#c6b7cc'},
+          torte:     {bg:'#242424',surface:'#2e2e2e',border:'#484848',accent:'#87afff',accentDim:'#5f87d7',green:'#87af87',red:'#af5f5f',yellow:'#af875f',text:'#e0e0e0',muted:'#b0b0b0'},
+          wildcharm: {bg:'#111111',surface:'#1a1a1a',border:'#333333',accent:'#d7af5f',accentDim:'#af8744',green:'#87af5f',red:'#af5f5f',yellow:'#d7af5f',text:'#e4d7b9',muted:'#b8ac90'},
+          zaibatsu:  {bg:'#0d1a12',surface:'#13261a',border:'#2b4635',accent:'#72d98c',accentDim:'#4fbf70',green:'#7ce38f',red:'#d97b7b',yellow:'#d9c97b',text:'#d9f2df',muted:'#9ec7ab'},
+          zellner:   {bg:'#1a1a2a',surface:'#24243a',border:'#3d3d5a',accent:'#8a9bff',accentDim:'#6b7bd6',green:'#8ad6a1',red:'#d68a8a',yellow:'#d6c78a',text:'#e8e8ff',muted:'#b3b3cf'}
+        };
+        var vimThemes = Object.keys(vimPalettes);
+        var validThemes = ['light', 'dark', 'forest', 'sunset', 'dark_hc'].concat(vimThemes);
+        var cssVars = ['bg','surface','border','accent','accentDim','green','red','yellow','text','muted'];
+        function applyPalette(theme) {
+          var root = document.documentElement;
+          var palette = vimPalettes[theme];
+          if (!palette) {
+            cssVars.forEach(function(key) {
+              var cssName = key === 'accentDim' ? '--accent-dim' : ('--' + key);
+              root.style.removeProperty(cssName);
+            });
+            return;
+          }
+          cssVars.forEach(function(key) {
+            var cssName = key === 'accentDim' ? '--accent-dim' : ('--' + key);
+            root.style.setProperty(cssName, palette[key]);
+          });
+        }
+        var serverTheme = '{{.ThemePref}}';
+        var theme = localStorage.getItem(key) || 'light';
+        if (validThemes.indexOf(serverTheme) !== -1) {
+          theme = serverTheme;
+        }
+        if (validThemes.indexOf(theme) === -1) {
           theme = 'light';
         }
+        localStorage.setItem(key, theme);
         document.documentElement.setAttribute('data-theme', theme);
+        applyPalette(theme);
+        window.smoltVimThemeNames = vimThemes;
+        window.smoltApplyThemePalette = applyPalette;
       } catch (_) {}
     })();
   </script>
@@ -57,6 +111,58 @@
       --yellow:    #f59e0b;
       --text:      #e2e8f0;
       --muted:     #94a3b8;
+    }
+
+    html[data-theme="forest"] {
+      --bg:        #eef4ef;
+      --surface:   #f9fcf7;
+      --border:    #c7d8c6;
+      --accent:    #1f7a4b;
+      --accent-dim:#155a37;
+      --green:     #15803d;
+      --red:       #b91c1c;
+      --yellow:    #a16207;
+      --text:      #143322;
+      --muted:     #486557;
+    }
+
+    html[data-theme="sunset"] {
+      --bg:        #fff3eb;
+      --surface:   #ffffff;
+      --border:    #f3c8ae;
+      --accent:    #d94f2b;
+      --accent-dim:#af3d1e;
+      --green:     #2f855a;
+      --red:       #c53030;
+      --yellow:    #b7791f;
+      --text:      #402018;
+      --muted:     #7a4a3a;
+    }
+
+    html[data-theme="peachpuff"] {
+      --bg:        #fff0e0;
+      --surface:   #fff7ef;
+      --border:    #e7c6a5;
+      --accent:    #c46a2d;
+      --accent-dim:#9f5120;
+      --green:     #2f855a;
+      --red:       #c53030;
+      --yellow:    #b7791f;
+      --text:      #3b2412;
+      --muted:     #80563d;
+    }
+
+    html[data-theme="dark_hc"] {
+      --bg:        #000000;
+      --surface:   #0d0d0d;
+      --border:    #4d4d4d;
+      --accent:    #00e5ff;
+      --accent-dim:#00b8cc;
+      --green:     #39ff88;
+      --red:       #ff4d4d;
+      --yellow:    #ffd447;
+      --text:      #ffffff;
+      --muted:     #d1d5db;
     }
 
 
@@ -268,6 +374,9 @@
         <div id="theme-menu" class="theme-menu" hidden>
           <button type="button" class="theme-option" data-theme-value="light">Light</button>
           <button type="button" class="theme-option" data-theme-value="dark">Dark</button>
+          <button type="button" class="theme-option" data-theme-value="forest">Forest</button>
+          <button type="button" class="theme-option" data-theme-value="sunset">Sunset</button>
+          <button type="button" class="theme-option" data-theme-value="dark_hc">Dark High Contrast</button>
         </div>
       </div>
       {{if .User}}
@@ -288,7 +397,10 @@
       var key = 'smolt-theme';
       var menu = document.getElementById('theme-menu');
       var button = document.getElementById('theme-button');
-      var validThemes = ['light', 'dark'];
+      var validThemes = ['light', 'dark', 'forest', 'sunset', 'dark_hc'];
+      if (Array.isArray(window.smoltVimThemeNames)) {
+        validThemes = validThemes.concat(window.smoltVimThemeNames);
+      }
 
       function storedTheme() {
         var theme = localStorage.getItem(key) || 'light';
@@ -314,6 +426,9 @@
         }
         localStorage.setItem(key, theme);
         document.documentElement.setAttribute('data-theme', theme);
+        if (typeof window.smoltApplyThemePalette === 'function') {
+          window.smoltApplyThemePalette(theme);
+        }
         markActive(theme);
       }
 

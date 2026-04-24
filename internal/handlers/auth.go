@@ -105,12 +105,18 @@ func (h *AuthHandlers) renderProfile(w http.ResponseWriter, r *http.Request, use
 		http.Error(w, "Failed to load profile", http.StatusInternalServerError)
 		return
 	}
+	themePref, err := h.authService.GetThemePref(r.Context(), user.UserID)
+	if err != nil {
+		http.Error(w, "Failed to load profile", http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "text/html")
 	templates.Render(w, "profile.html", map[string]any{
 		"User":             user,
 		"UnitPref":         unitPref,
 		"DistanceUnitPref": distanceUnitPref,
+		"ThemePref":        themePref,
 		"Saved":            savedMsg,
 		"Error":            errorMsg,
 	})
@@ -326,6 +332,14 @@ func (h *AuthHandlers) Profile(w http.ResponseWriter, r *http.Request) {
 				h.renderProfile(w, r, user, "Invalid distance unit preference", "")
 				return
 			}
+			themePref := r.FormValue("theme_pref")
+			if themePref == "" {
+				themePref, _ = h.authService.GetThemePref(r.Context(), user.UserID)
+			}
+			if err := h.authService.UpdateThemePref(r.Context(), user.UserID, themePref); err != nil {
+				h.renderProfile(w, r, user, "Invalid theme preference", "")
+				return
+			}
 
 			http.Redirect(w, r, "/profile?settings_saved=1", http.StatusFound)
 			return
@@ -363,12 +377,14 @@ func (h *AuthHandlers) Onboarding(w http.ResponseWriter, r *http.Request) {
 	render := func(errMsg string) {
 		unitPref, _ := h.authService.GetUnitPref(r.Context(), user.UserID)
 		distanceUnitPref, _ := h.authService.GetDistanceUnitPref(r.Context(), user.UserID)
+		themePref, _ := h.authService.GetThemePref(r.Context(), user.UserID)
 		w.Header().Set("Content-Type", "text/html")
 		templates.Render(w, "onboarding.html", map[string]any{
 			"User":             user,
 			"Error":            errMsg,
 			"UnitPref":         unitPref,
 			"DistanceUnitPref": distanceUnitPref,
+			"ThemePref":        themePref,
 			"Squat":            r.FormValue("squat"),
 			"Bench":            r.FormValue("bench"),
 			"Row":              r.FormValue("row"),
@@ -505,6 +521,11 @@ func (h *AuthHandlers) Dashboard(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to load open workouts", http.StatusInternalServerError)
 		return
 	}
+	themePref, err := h.authService.GetThemePref(r.Context(), user.UserID)
+	if err != nil {
+		http.Error(w, "Failed to load theme preference", http.StatusInternalServerError)
+		return
+	}
 
 	type ExercisePlan struct {
 		Name   string
@@ -552,6 +573,7 @@ func (h *AuthHandlers) Dashboard(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	templates.Render(w, "dashboard.html", map[string]any{
 		"User":               user,
+		"ThemePref":          themePref,
 		"Plan":               plan,
 		"PlanA":              planA,
 		"PlanB":              planB,
