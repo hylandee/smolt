@@ -933,6 +933,87 @@ func TestFinishWorkoutBDeadliftIncrementImperial(t *testing.T) {
 	t.Fatalf("did not find deadlift progress update in %v", updates)
 }
 
+func TestFinishWorkoutUsesManualWeightEditsForProgression(t *testing.T) {
+	app := newApp(t)
+	defer app.cleanup()
+	cookie := app.registerAndLogin(t, "manualweightprogress")
+
+	resp := app.postJSON(t, "/workout/start", cookie, nil)
+	var session map[string]any
+	decodeJSON(t, resp, &session)
+	sessionID := int(session["sessionId"].(float64))
+
+	rows, err := app.db.Conn().Query(`SELECT set_number, exercise_name FROM exercise_sets WHERE session_id = ? ORDER BY set_number`, sessionID)
+	if err != nil {
+		t.Fatalf("query sets: %v", err)
+	}
+	var setNums []int
+	var setExercises []string
+	for rows.Next() {
+		var setNum int
+		var exName string
+		if err := rows.Scan(&setNum, &exName); err != nil {
+			rows.Close()
+			t.Fatalf("scan set row: %v", err)
+		}
+		setNums = append(setNums, setNum)
+		setExercises = append(setExercises, exName)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		t.Fatalf("iterate sets: %v", err)
+	}
+	rows.Close()
+
+	for i, setNum := range setNums {
+		exName := setExercises[i]
+
+		weight := 195.0
+		if exName == "Bench Press" {
+			weight = 145.0 // manual load-up from 135
+		}
+		if exName == "Barbell Row" {
+			weight = 85.0 // manual load-down from 95
+		}
+
+		resp = app.postJSON(t,
+			fmt.Sprintf("/workout/%d/set/%d/complete", sessionID, setNum),
+			cookie,
+			map[string]any{"actualReps": 5, "weight": weight},
+		)
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("set %d: expected 200, got %d: %s", setNum, resp.StatusCode, body)
+		}
+		resp.Body.Close()
+	}
+
+	resp = app.postJSON(t, fmt.Sprintf("/workout/%d/finish", sessionID), cookie, nil)
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200, got %d: %s", resp.StatusCode, body)
+	}
+	resp.Body.Close()
+
+	var benchWeight float64
+	err = app.db.Conn().QueryRow(`SELECT current_weight FROM lift_progress WHERE exercise_name = 'Bench Press'`).Scan(&benchWeight)
+	if err != nil {
+		t.Fatalf("query bench progress: %v", err)
+	}
+	if benchWeight != 150.0 {
+		t.Fatalf("expected Bench Press weight 150.0 from manual 145 + 5, got %.1f", benchWeight)
+	}
+
+	var rowWeight float64
+	err = app.db.Conn().QueryRow(`SELECT current_weight FROM lift_progress WHERE exercise_name = 'Barbell Row'`).Scan(&rowWeight)
+	if err != nil {
+		t.Fatalf("query row progress: %v", err)
+	}
+	if rowWeight != 90.0 {
+		t.Fatalf("expected Barbell Row weight 90.0 from manual 85 + 5, got %.1f", rowWeight)
+	}
+}
+
 func TestFinishWorkoutWithFailedSetsIncrementsFailStreak(t *testing.T) {
 	app := newApp(t)
 	defer app.cleanup()
@@ -1434,7 +1515,7 @@ func TestSkipNextIncrementPreventsOneIncrease(t *testing.T) {
 		resp = app.postJSON(t,
 			fmt.Sprintf("/workout/%d/set/%d/complete", sessionID, setNum),
 			cookie,
-			map[string]any{"actualReps": 5, "weight": 20.0},
+			map[string]any{"actualReps": 5, "weight": 195.0},
 		)
 		if resp.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(resp.Body)

@@ -1097,7 +1097,7 @@ func (s *ProgressionService) FinishSession(ctx context.Context, sessionID int64,
 
 	// Get all sets grouped by exercise
 	rows, err := tx.QueryContext(ctx,
-		`SELECT exercise_name, set_number, target_reps, COALESCE(actual_reps, 0)
+		`SELECT exercise_name, set_number, target_reps, COALESCE(actual_reps, 0), COALESCE(weight, 0)
 		 FROM exercise_sets WHERE session_id = ? ORDER BY exercise_name, set_number`,
 		sessionID,
 	)
@@ -1108,21 +1108,34 @@ func (s *ProgressionService) FinishSession(ctx context.Context, sessionID int64,
 
 	// Group reps per exercise
 	type setResult struct{ target, actual int }
-	exerciseSets := make(map[string][]setResult)
+	type exercisePerformance struct {
+		sets       []setResult
+		lastSetNum int
+		lastWeight float64
+	}
+	exerciseSets := make(map[string]exercisePerformance)
 	for rows.Next() {
 		var exName string
 		var setNum, target, actual int
-		if err := rows.Scan(&exName, &setNum, &target, &actual); err != nil {
+		var weight float64
+		if err := rows.Scan(&exName, &setNum, &target, &actual, &weight); err != nil {
 			return nil, err
 		}
 		canonical := canonicalExerciseName(exName)
-		exerciseSets[canonical] = append(exerciseSets[canonical], setResult{target, actual})
+		performance := exerciseSets[canonical]
+		performance.sets = append(performance.sets, setResult{target, actual})
+		if setNum >= performance.lastSetNum {
+			performance.lastSetNum = setNum
+			performance.lastWeight = weight
+		}
+		exerciseSets[canonical] = performance
 	}
 	rows.Close()
 
 	var updates []ProgressUpdate
 
-	for exName, sets := range exerciseSets {
+	for exName, performance := range exerciseSets {
+		sets := performance.sets
 		// Check if all sets hit target reps
 		allComplete := true
 		for _, s := range sets {
@@ -1161,16 +1174,21 @@ func (s *ProgressionService) FinishSession(ctx context.Context, sessionID int64,
 		}
 		skipIncrement = skipIncrementRaw == 1
 
-		oldWeight := p.CurrentWeight
+		progressionBase := p.CurrentWeight
+		if performance.lastWeight > 0 {
+			progressionBase = performance.lastWeight
+		}
+
+		oldWeight := progressionBase
 		var newWeight float64
 		action := "unchanged"
 
 		if allComplete {
 			if skipIncrement {
-				newWeight = p.CurrentWeight
+				newWeight = progressionBase
 				action = "unchanged"
 			} else {
-				newWeight = p.CurrentWeight + p.IncrementBy
+				newWeight = progressionBase + p.IncrementBy
 				action = "increased"
 			}
 			p.FailStreak = 0
@@ -1178,11 +1196,11 @@ func (s *ProgressionService) FinishSession(ctx context.Context, sessionID int64,
 			p.FailStreak++
 			if p.FailStreak >= 3 {
 				// Deload: round down to the nearest unit-appropriate step.
-				newWeight = math.Floor((p.CurrentWeight*0.9)/deloadStep) * deloadStep
+				newWeight = math.Floor((progressionBase*0.9)/deloadStep) * deloadStep
 				action = "deload"
 				p.FailStreak = 0
 			} else {
-				newWeight = p.CurrentWeight
+				newWeight = progressionBase
 			}
 		}
 
