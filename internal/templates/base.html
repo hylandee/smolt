@@ -69,6 +69,55 @@
         window.smoltApplyThemePalette = applyPalette;
       } catch (_) {}
     })();
+
+    (function() {
+      var keepAwakeEnabled = '{{if .KeepAwakePref}}1{{else}}0{{end}}' === '1';
+      var wakeLock = null;
+
+      async function requestWakeLock() {
+        if (!keepAwakeEnabled) return;
+        if (!('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+          wakeLock.addEventListener('release', function() {
+            wakeLock = null;
+          });
+        } catch (_) {}
+      }
+
+      async function releaseWakeLock() {
+        if (!wakeLock) return;
+        try {
+          await wakeLock.release();
+        } catch (_) {}
+        wakeLock = null;
+      }
+
+      document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'visible') {
+          requestWakeLock();
+        } else {
+          releaseWakeLock();
+        }
+      });
+
+      window.addEventListener('pageshow', function() {
+        requestWakeLock();
+      });
+
+      window.smoltWakeApi = {
+        setEnabled: function(enabled) {
+          keepAwakeEnabled = !!enabled;
+          if (keepAwakeEnabled) {
+            requestWakeLock();
+          } else {
+            releaseWakeLock();
+          }
+        }
+      };
+
+      requestWakeLock();
+    })();
   </script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }

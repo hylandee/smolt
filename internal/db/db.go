@@ -44,6 +44,7 @@ func (d *DB) CreateSchema() error {
 			unit_pref TEXT DEFAULT 'lb_in',
 			distance_unit_pref TEXT DEFAULT 'mi',
 			theme_pref TEXT DEFAULT 'light',
+			keep_awake INTEGER DEFAULT 1,
 			bar_weight REAL DEFAULT 20.0,
 			rest_timer INTEGER DEFAULT 90,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -162,6 +163,11 @@ func (d *DB) CreateSchema() error {
 			return fmt.Errorf("failed to ensure users.theme_pref column: %w", err)
 		}
 	}
+	if _, err := d.conn.Exec(`ALTER TABLE users ADD COLUMN keep_awake INTEGER DEFAULT 1`); err != nil {
+		if !strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
+			return fmt.Errorf("failed to ensure users.keep_awake column: %w", err)
+		}
+	}
 	if _, err := d.conn.Exec(`ALTER TABLE standalone_workouts ADD COLUMN title TEXT`); err != nil {
 		if !strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
 			return fmt.Errorf("failed to ensure standalone_workouts.title column: %w", err)
@@ -206,6 +212,12 @@ func (d *DB) CreateSchema() error {
 	}
 	if _, err := d.conn.Exec(`UPDATE users SET theme_pref = 'light' WHERE theme_pref NOT IN ('light', 'dark', 'forest', 'sunset', 'peachpuff', 'dark_hc', 'blue', 'darkblue', 'default', 'delek', 'desert', 'elflord', 'evening', 'habamax', 'industry', 'koehler', 'lunaperche', 'morning', 'murphy', 'pablo', 'quiet', 'retrobox', 'ron', 'shine', 'slate', 'sorbet', 'torte', 'wildcharm', 'zaibatsu', 'zellner')`); err != nil {
 		return fmt.Errorf("failed to normalize theme preference values: %w", err)
+	}
+	if _, err := d.conn.Exec(`UPDATE users SET keep_awake = 1 WHERE keep_awake IS NULL`); err != nil {
+		return fmt.Errorf("failed to migrate keep awake preferences: %w", err)
+	}
+	if _, err := d.conn.Exec(`UPDATE users SET keep_awake = CASE WHEN keep_awake IN (0, 1) THEN keep_awake ELSE 1 END`); err != nil {
+		return fmt.Errorf("failed to normalize keep awake preferences: %w", err)
 	}
 
 	return nil

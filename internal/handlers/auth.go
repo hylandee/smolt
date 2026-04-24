@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"stronglifts/internal/auth"
 	"stronglifts/internal/db"
 	"stronglifts/internal/templates"
@@ -110,6 +111,11 @@ func (h *AuthHandlers) renderProfile(w http.ResponseWriter, r *http.Request, use
 		http.Error(w, "Failed to load profile", http.StatusInternalServerError)
 		return
 	}
+	keepAwakePref, err := h.authService.GetKeepAwakePref(r.Context(), user.UserID)
+	if err != nil {
+		http.Error(w, "Failed to load profile", http.StatusInternalServerError)
+		return
+	}
 
 	w.Header().Set("Content-Type", "text/html")
 	templates.Render(w, "profile.html", map[string]any{
@@ -117,6 +123,7 @@ func (h *AuthHandlers) renderProfile(w http.ResponseWriter, r *http.Request, use
 		"UnitPref":         unitPref,
 		"DistanceUnitPref": distanceUnitPref,
 		"ThemePref":        themePref,
+		"KeepAwakePref":    keepAwakePref,
 		"Saved":            savedMsg,
 		"Error":            errorMsg,
 	})
@@ -126,7 +133,7 @@ func (h *AuthHandlers) renderProfile(w http.ResponseWriter, r *http.Request, use
 func (h *AuthHandlers) Register(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		w.Header().Set("Content-Type", "text/html")
-		templates.Render(w, "register.html", map[string]any{"User": nil})
+		templates.Render(w, "register.html", map[string]any{"User": nil, "KeepAwakePref": true})
 		return
 	}
 
@@ -141,9 +148,10 @@ func (h *AuthHandlers) Register(w http.ResponseWriter, r *http.Request) {
 	renderErr := func(msg string) {
 		w.Header().Set("Content-Type", "text/html")
 		templates.Render(w, "register.html", map[string]any{
-			"User":     nil,
-			"Error":    msg,
-			"Username": username,
+			"User":          nil,
+			"Error":         msg,
+			"Username":      username,
+			"KeepAwakePref": true,
 		})
 	}
 
@@ -179,7 +187,7 @@ func (h *AuthHandlers) Register(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		w.Header().Set("Content-Type", "text/html")
-		templates.Render(w, "login.html", map[string]any{"User": nil})
+		templates.Render(w, "login.html", map[string]any{"User": nil, "KeepAwakePref": true})
 		return
 	}
 
@@ -194,9 +202,10 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 	renderErr := func(msg string) {
 		w.Header().Set("Content-Type", "text/html")
 		templates.Render(w, "login.html", map[string]any{
-			"User":     nil,
-			"Error":    msg,
-			"Username": username,
+			"User":          nil,
+			"Error":         msg,
+			"Username":      username,
+			"KeepAwakePref": true,
 		})
 	}
 
@@ -340,6 +349,11 @@ func (h *AuthHandlers) Profile(w http.ResponseWriter, r *http.Request) {
 				h.renderProfile(w, r, user, "Invalid theme preference", "")
 				return
 			}
+			keepAwakePref := strings.TrimSpace(r.FormValue("keep_awake")) == "1"
+			if err := h.authService.UpdateKeepAwakePref(r.Context(), user.UserID, keepAwakePref); err != nil {
+				h.renderProfile(w, r, user, "Invalid keep awake preference", "")
+				return
+			}
 
 			http.Redirect(w, r, "/profile?settings_saved=1", http.StatusFound)
 			return
@@ -378,6 +392,7 @@ func (h *AuthHandlers) Onboarding(w http.ResponseWriter, r *http.Request) {
 		unitPref, _ := h.authService.GetUnitPref(r.Context(), user.UserID)
 		distanceUnitPref, _ := h.authService.GetDistanceUnitPref(r.Context(), user.UserID)
 		themePref, _ := h.authService.GetThemePref(r.Context(), user.UserID)
+		keepAwakePref, _ := h.authService.GetKeepAwakePref(r.Context(), user.UserID)
 		w.Header().Set("Content-Type", "text/html")
 		templates.Render(w, "onboarding.html", map[string]any{
 			"User":             user,
@@ -385,6 +400,7 @@ func (h *AuthHandlers) Onboarding(w http.ResponseWriter, r *http.Request) {
 			"UnitPref":         unitPref,
 			"DistanceUnitPref": distanceUnitPref,
 			"ThemePref":        themePref,
+			"KeepAwakePref":    keepAwakePref,
 			"Squat":            r.FormValue("squat"),
 			"Bench":            r.FormValue("bench"),
 			"Row":              r.FormValue("row"),
@@ -526,6 +542,11 @@ func (h *AuthHandlers) Dashboard(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to load theme preference", http.StatusInternalServerError)
 		return
 	}
+	keepAwakePref, err := h.authService.GetKeepAwakePref(r.Context(), user.UserID)
+	if err != nil {
+		http.Error(w, "Failed to load keep awake preference", http.StatusInternalServerError)
+		return
+	}
 
 	type ExercisePlan struct {
 		Name   string
@@ -574,6 +595,7 @@ func (h *AuthHandlers) Dashboard(w http.ResponseWriter, r *http.Request) {
 	templates.Render(w, "dashboard.html", map[string]any{
 		"User":               user,
 		"ThemePref":          themePref,
+		"KeepAwakePref":      keepAwakePref,
 		"Plan":               plan,
 		"PlanA":              planA,
 		"PlanB":              planB,

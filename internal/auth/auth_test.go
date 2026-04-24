@@ -799,6 +799,50 @@ func TestUpdateThemePreferenceToDarkHighContrast(t *testing.T) {
 	}
 }
 
+func TestDisableKeepAwakePreference(t *testing.T) {
+	client, cleanup := newTestApp(t)
+	defer cleanup()
+
+	resp, _ := client.PostForm("http://app/register", url.Values{
+		"username": {"alice"},
+		"password": {"password123"},
+		"confirm":  {"password123"},
+	})
+	resp.Body.Close()
+
+	resp, _ = client.PostForm("http://app/login", url.Values{
+		"username": {"alice"},
+		"password": {"password123"},
+	})
+	cookie := resp.Header.Get("Set-Cookie")
+	resp.Body.Close()
+
+	req, _ := http.NewRequest("POST", "http://app/profile", strings.NewReader("unit_pref=lb_in&distance_unit_pref=mi&theme_pref=light"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	parts := strings.SplitN(cookie, ";", 2)
+	req.Header.Set("Cookie", parts[0])
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("POST /profile keep_awake off: %v", err)
+	}
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("expected 302, got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	req, _ = http.NewRequest("GET", "http://app/profile", nil)
+	req.Header.Set("Cookie", parts[0])
+	resp, err = client.Do(req)
+	if err != nil {
+		t.Fatalf("GET /profile after keep_awake update: %v", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if strings.Contains(string(body), `name="keep_awake" value="1" checked`) {
+		t.Fatalf("expected keep awake checkbox to be unchecked, body: %s", body)
+	}
+}
+
 func TestProfileUpdatesPassword(t *testing.T) {
 	client, cleanup := newTestApp(t)
 	defer cleanup()

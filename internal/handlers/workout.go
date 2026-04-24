@@ -121,6 +121,11 @@ func (h *WorkoutHandlers) WorkoutPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to load theme preference", http.StatusInternalServerError)
 		return
 	}
+	keepAwakePref, err := h.authService.GetKeepAwakePref(r.Context(), user.UserID)
+	if err != nil {
+		http.Error(w, "Failed to load keep awake preference", http.StatusInternalServerError)
+		return
+	}
 	workouts, err := h.progression.ListStandaloneWorkouts(r.Context(), user.UserID)
 	if err != nil {
 		http.Error(w, "Failed to load standalone workouts", http.StatusInternalServerError)
@@ -131,6 +136,7 @@ func (h *WorkoutHandlers) WorkoutPage(w http.ResponseWriter, r *http.Request) {
 	templates.Render(w, "workout.html", map[string]any{
 		"User":               user,
 		"ThemePref":          themePref,
+		"KeepAwakePref":      keepAwakePref,
 		"Session":            session,
 		"WeightUnit":         weightUnit,
 		"DistanceUnit":       distanceUnit,
@@ -243,7 +249,12 @@ func (h *WorkoutHandlers) StandaloneEditor(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "Failed to load theme preference", http.StatusInternalServerError)
 		return
 	}
-	h.renderStandaloneEditor(w, user, weightUnit, distanceUnit, nil, "", "/workout/standalone", "Save Standalone Workout", themePref)
+	keepAwakePref, err := h.authService.GetKeepAwakePref(r.Context(), user.UserID)
+	if err != nil {
+		http.Error(w, "Failed to load keep awake preference", http.StatusInternalServerError)
+		return
+	}
+	h.renderStandaloneEditor(w, user, weightUnit, distanceUnit, nil, "", "/workout/standalone", "Save Standalone Workout", themePref, keepAwakePref)
 }
 
 // EditStandaloneWorkout handles GET /workout/standalone/{id}/edit
@@ -274,7 +285,12 @@ func (h *WorkoutHandlers) EditStandaloneWorkout(w http.ResponseWriter, r *http.R
 		http.Error(w, "Failed to load theme preference", http.StatusInternalServerError)
 		return
 	}
-	h.renderStandaloneEditor(w, user, weightUnit, distanceUnit, detail, "", fmt.Sprintf("/workout/standalone/%d", workoutID), "Update Standalone Workout", themePref)
+	keepAwakePref, err := h.authService.GetKeepAwakePref(r.Context(), user.UserID)
+	if err != nil {
+		http.Error(w, "Failed to load keep awake preference", http.StatusInternalServerError)
+		return
+	}
+	h.renderStandaloneEditor(w, user, weightUnit, distanceUnit, detail, "", fmt.Sprintf("/workout/standalone/%d", workoutID), "Update Standalone Workout", themePref, keepAwakePref)
 }
 
 // CreateStandaloneWorkout handles POST /workout/standalone
@@ -436,7 +452,7 @@ func (h *WorkoutHandlers) parseStandaloneItems(w http.ResponseWriter, r *http.Re
 	return items, true
 }
 
-func (h *WorkoutHandlers) renderStandaloneEditor(w http.ResponseWriter, user *auth.UserSession, weightUnit, distanceUnit string, existing *workout.StandaloneWorkoutDetail, errorMsg, formAction, submitLabel, themePref string) {
+func (h *WorkoutHandlers) renderStandaloneEditor(w http.ResponseWriter, user *auth.UserSession, weightUnit, distanceUnit string, existing *workout.StandaloneWorkoutDetail, errorMsg, formAction, submitLabel, themePref string, keepAwakePref bool) {
 	var initialJSON string
 	if existing != nil {
 		if data, err := json.Marshal(existing); err == nil {
@@ -447,6 +463,7 @@ func (h *WorkoutHandlers) renderStandaloneEditor(w http.ResponseWriter, user *au
 	templates.Render(w, "standalone_editor.html", map[string]any{
 		"User":                user,
 		"ThemePref":           themePref,
+		"KeepAwakePref":       keepAwakePref,
 		"Error":               errorMsg,
 		"WeightUnit":          weightUnit,
 		"DistanceUnit":        distanceUnit,
@@ -471,7 +488,11 @@ func (h *WorkoutHandlers) renderStandaloneEditorError(w http.ResponseWriter, r *
 	if err != nil {
 		themePref = auth.ThemePrefLight
 	}
-	h.renderStandaloneEditor(w, user, weightUnit, distanceUnit, existing, msg, formAction, submitLabel, themePref)
+	keepAwakePref, err := h.authService.GetKeepAwakePref(r.Context(), user.UserID)
+	if err != nil {
+		keepAwakePref = true
+	}
+	h.renderStandaloneEditor(w, user, weightUnit, distanceUnit, existing, msg, formAction, submitLabel, themePref, keepAwakePref)
 }
 
 // POST /workout/{id}/set/{n}/complete
@@ -985,11 +1006,16 @@ func (h *WorkoutHandlers) ProgressCharts(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		themePref = auth.ThemePrefLight
 	}
+	keepAwakePref, err := h.authService.GetKeepAwakePref(r.Context(), user.UserID)
+	if err != nil {
+		keepAwakePref = true
+	}
 
 	w.Header().Set("Content-Type", "text/html")
 	templates.Render(w, "progress_charts.html", map[string]any{
 		"User":               user,
 		"ThemePref":          themePref,
+		"KeepAwakePref":      keepAwakePref,
 		"StrengthSeriesJSON": string(seriesJSONBytes),
 		"CardioSeriesJSON":   string(cardioJSONBytes),
 		"DistanceUnit":       distanceUnit,
@@ -1072,6 +1098,11 @@ func (h *WorkoutHandlers) renderDashboard(w http.ResponseWriter, r *http.Request
 		http.Error(w, "Failed to load theme preference", http.StatusInternalServerError)
 		return
 	}
+	keepAwakePref, err := h.authService.GetKeepAwakePref(r.Context(), user.UserID)
+	if err != nil {
+		http.Error(w, "Failed to load keep awake preference", http.StatusInternalServerError)
+		return
+	}
 
 	var finishSummary *workout.FinishSummary
 	if raw := strings.TrimSpace(r.URL.Query().Get("finished")); raw != "" {
@@ -1133,6 +1164,7 @@ func (h *WorkoutHandlers) renderDashboard(w http.ResponseWriter, r *http.Request
 	templates.Render(w, "dashboard.html", map[string]any{
 		"User":               user,
 		"ThemePref":          themePref,
+		"KeepAwakePref":      keepAwakePref,
 		"Plan":               plan,
 		"PlanA":              planA,
 		"PlanB":              planB,

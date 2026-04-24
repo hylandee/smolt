@@ -43,6 +43,7 @@ type AuthService struct {
 type UserSettings struct {
 	UnitPref         string
 	DistanceUnitPref string
+	KeepAwake        bool
 }
 
 func NewAuthService(db *sql.DB) *AuthService {
@@ -316,6 +317,45 @@ func (a *AuthService) UpdateThemePref(ctx context.Context, userID int, themePref
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update theme preference: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to read update result: %w", err)
+	}
+	if affected == 0 {
+		return ErrUserNotFound
+	}
+
+	return nil
+}
+
+// GetKeepAwakePref returns whether the user's screen should be kept awake when possible.
+func (a *AuthService) GetKeepAwakePref(ctx context.Context, userID int) (bool, error) {
+	var keepAwake bool
+	err := a.db.QueryRowContext(
+		ctx,
+		"SELECT COALESCE(keep_awake, 1) FROM users WHERE id = ? AND deleted_at IS NULL",
+		userID,
+	).Scan(&keepAwake)
+	if err == sql.ErrNoRows {
+		return false, ErrUserNotFound
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to query keep awake preference: %w", err)
+	}
+	return keepAwake, nil
+}
+
+// UpdateKeepAwakePref updates whether the user's screen should be kept awake when possible.
+func (a *AuthService) UpdateKeepAwakePref(ctx context.Context, userID int, keepAwake bool) error {
+	result, err := a.db.ExecContext(
+		ctx,
+		"UPDATE users SET keep_awake = ? WHERE id = ? AND deleted_at IS NULL",
+		keepAwake,
+		userID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update keep awake preference: %w", err)
 	}
 	affected, err := result.RowsAffected()
 	if err != nil {

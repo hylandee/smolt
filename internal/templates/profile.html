@@ -59,6 +59,17 @@
       </label>
     </div>
 
+    <div class="card-subtitle" style="margin-bottom:.5rem">Screen Awake</div>
+    <div class="form-group" style="margin-bottom:1rem;">
+      <label style="display:flex;align-items:flex-start;gap:.6rem;cursor:pointer;">
+        <input type="checkbox" name="keep_awake" value="1" {{if .KeepAwakePref}}checked{{end}} style="margin-top:.2rem;">
+        <span>
+          <strong style="display:block;color:var(--text);font-size:.95rem;">Keep screen awake</strong>
+          <span style="color:var(--muted);font-size:.85rem;">Prevents the screen from sleeping during workouts when the browser supports Wake Lock. Enabled by default.</span>
+        </span>
+      </label>
+    </div>
+
     <div class="card-subtitle" style="margin-bottom:.5rem">Theme</div>
     <div class="form-group" style="margin-bottom:.75rem;">
       <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
@@ -250,7 +261,14 @@
       }
     }
 
+    function applyKeepAwake(enabled) {
+      if (window.smoltWakeApi && typeof window.smoltWakeApi.setEnabled === 'function') {
+        window.smoltWakeApi.setEnabled(enabled);
+      }
+    }
+
     var radios = prefsForm.querySelectorAll('input[name="theme_pref"]');
+    var keepAwakeToggle = prefsForm.querySelector('input[name="keep_awake"]');
     var stored = serverThemeInput.value || currentTheme();
     radios.forEach(function(radio) {
       if (radio.value === stored) {
@@ -265,6 +283,12 @@
 
     if (isVimTheme(stored)) {
       revealVimThemes(false);
+    }
+
+    if (keepAwakeToggle) {
+      keepAwakeToggle.addEventListener('change', function() {
+        applyKeepAwake(keepAwakeToggle.checked);
+      });
     }
 
     var colonPressedAt = 0;
@@ -283,6 +307,9 @@
       var selected = prefsForm.querySelector('input[name="theme_pref"]:checked');
       if (selected) {
         applyTheme(selected.value);
+      }
+      if (keepAwakeToggle) {
+        applyKeepAwake(keepAwakeToggle.checked);
       }
     });
   })();
