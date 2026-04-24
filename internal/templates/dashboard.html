@@ -88,14 +88,6 @@
             <form method="POST" action="/progress/{{.Name}}/deload" style="margin:0;">
               <button class="btn btn-ghost btn-sm" type="submit">Deload 10%</button>
             </form>
-            <form method="POST" action="/progress/{{.Name}}/skip-increment" style="margin:0;">
-              <input type="hidden" name="skip" value="1">
-              <button class="btn btn-ghost btn-sm" type="submit">Skip Next Increment</button>
-            </form>
-            <form method="POST" action="/progress/{{.Name}}/skip-increment" style="margin:0;">
-              <input type="hidden" name="skip" value="0">
-              <button class="btn btn-ghost btn-sm" type="submit">Clear Skip</button>
-            </form>
           </div>
         </li>
         {{end}}
@@ -120,14 +112,6 @@
           <div style="grid-column:1 / span 2;display:flex;gap:.45rem;flex-wrap:wrap;">
             <form method="POST" action="/progress/{{.Name}}/deload" style="margin:0;">
               <button class="btn btn-ghost btn-sm" type="submit">Deload 10%</button>
-            </form>
-            <form method="POST" action="/progress/{{.Name}}/skip-increment" style="margin:0;">
-              <input type="hidden" name="skip" value="1">
-              <button class="btn btn-ghost btn-sm" type="submit">Skip Next Increment</button>
-            </form>
-            <form method="POST" action="/progress/{{.Name}}/skip-increment" style="margin:0;">
-              <input type="hidden" name="skip" value="0">
-              <button class="btn btn-ghost btn-sm" type="submit">Clear Skip</button>
             </form>
           </div>
         </li>
