@@ -1352,7 +1352,7 @@ func TestDashboardRecentWorkoutsPaginatedToTenByDefault(t *testing.T) {
 	if got := strings.Count(bodyStr, `>Open</a>`); got != 10 {
 		t.Fatalf("expected 10 recent workout open links on first page, got %d", got)
 	}
-	if !strings.Contains(bodyStr, `href="/?page=2">2</a>`) {
+	if !strings.Contains(bodyStr, `href="/workouts?page=2">2</a>`) {
 		t.Fatalf("expected dashboard to show numbered pagination link for page 2")
 	}
 
@@ -1368,7 +1368,7 @@ func TestDashboardRecentWorkoutsPaginatedToTenByDefault(t *testing.T) {
 	if got := strings.Count(bodyStr, `>Open</a>`); got != 2 {
 		t.Fatalf("expected 2 recent workout open links on second page, got %d", got)
 	}
-	if !strings.Contains(bodyStr, `href="/?page=1">1</a>`) {
+	if !strings.Contains(bodyStr, `href="/workouts?page=1">1</a>`) {
 		t.Fatalf("expected dashboard page 2 to show numbered pagination link back to page 1")
 	}
 	if !strings.Contains(bodyStr, `>2</span>`) {

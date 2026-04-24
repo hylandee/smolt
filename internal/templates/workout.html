@@ -1488,7 +1488,7 @@
           })
           .then(function(data) {
             var finishedID = data && data.sessionId ? data.sessionId : sessionID;
-            window.location.href = '/?finished=' + encodeURIComponent(String(finishedID));
+            window.location.href = '/workouts?finished=' + encodeURIComponent(String(finishedID));
           })
           .catch(function() { alert('Failed to complete workout.'); });
       });
