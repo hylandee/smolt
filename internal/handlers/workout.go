@@ -29,8 +29,8 @@ type trackingSetInput struct {
 
 func NewWorkoutHandlers(database *db.DB) *WorkoutHandlers {
 	return &WorkoutHandlers{
-		progression: workout.NewProgressionService(database.Conn()),
-		authService: auth.NewAuthService(database.Conn()),
+		progression: workout.NewProgressionService(database),
+		authService: auth.NewAuthService(database),
 	}
 }
 

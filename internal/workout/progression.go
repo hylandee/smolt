@@ -7,6 +7,8 @@ import (
 	"math"
 	"strings"
 	"time"
+
+	appdb "stronglifts/internal/db"
 )
 
 // LiftProgress holds the current progression state for one exercise
@@ -20,7 +22,7 @@ type LiftProgress struct {
 
 // ProgressionService handles workout progression logic
 type ProgressionService struct {
-	db *sql.DB
+	db *appdb.DB
 }
 
 type FinishSummary struct {
@@ -100,7 +102,7 @@ const (
 	unitPrefImperial = "lb_in"
 )
 
-func NewProgressionService(db *sql.DB) *ProgressionService {
+func NewProgressionService(db *appdb.DB) *ProgressionService {
 	return &ProgressionService{db: db}
 }
 
@@ -903,32 +905,40 @@ func (s *ProgressionService) DeleteStandaloneWorkout(ctx context.Context, userID
 }
 
 func (s *ProgressionService) DeleteAllStandaloneWorkouts(ctx context.Context, userID int) (int, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id FROM standalone_workouts WHERE user_id = ?`, userID)
-	if err != nil {
-		return 0, fmt.Errorf("query standalone workouts for delete-all: %w", err)
-	}
-	defer rows.Close()
-
-	var workoutIDs []int64
-	for rows.Next() {
-		var workoutID int64
-		if err := rows.Scan(&workoutID); err != nil {
-			return 0, fmt.Errorf("scan standalone workout id: %w", err)
+	var deleted int
+	err := s.db.WithTx(ctx, func(tx *sql.Tx) error {
+		rows, err := tx.QueryContext(ctx, `SELECT id FROM standalone_workouts WHERE user_id = ?`, userID)
+		if err != nil {
+			return fmt.Errorf("query standalone workouts for delete-all: %w", err)
 		}
-		workoutIDs = append(workoutIDs, workoutID)
-	}
-	if err := rows.Err(); err != nil {
-		return 0, fmt.Errorf("iterate standalone workout ids: %w", err)
-	}
 
-	deleted := 0
-	for _, workoutID := range workoutIDs {
-		if err := s.DeleteStandaloneWorkout(ctx, userID, workoutID); err != nil {
-			return deleted, err
+		var workoutIDs []int64
+		for rows.Next() {
+			var workoutID int64
+			if err := rows.Scan(&workoutID); err != nil {
+				rows.Close()
+				return fmt.Errorf("scan standalone workout id: %w", err)
+			}
+			workoutIDs = append(workoutIDs, workoutID)
 		}
-		deleted++
-	}
-	return deleted, nil
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return fmt.Errorf("iterate standalone workout ids: %w", err)
+		}
+		rows.Close()
+
+		for _, workoutID := range workoutIDs {
+			if err := s.deleteStandaloneWorkoutItems(ctx, tx, workoutID); err != nil {
+				return fmt.Errorf("clear standalone workout %d items: %w", workoutID, err)
+			}
+			if _, err := tx.ExecContext(ctx, `DELETE FROM standalone_workouts WHERE id = ? AND user_id = ?`, workoutID, userID); err != nil {
+				return fmt.Errorf("delete standalone workout %d: %w", workoutID, err)
+			}
+			deleted++
+		}
+		return nil
+	})
+	return deleted, err
 }
 
 type SetUpdate struct {
@@ -939,25 +949,27 @@ type SetUpdate struct {
 }
 
 func (s *ProgressionService) ApplySetUpdates(ctx context.Context, sessionID int64, updates []SetUpdate) error {
-	for _, u := range updates {
-		if u.SetNumber <= 0 {
-			continue
+	return s.db.WithTx(ctx, func(tx *sql.Tx) error {
+		for _, u := range updates {
+			if u.SetNumber <= 0 {
+				continue
+			}
+			completed := 0
+			if u.Completed {
+				completed = 1
+			}
+			_, err := tx.ExecContext(ctx,
+				`UPDATE exercise_sets
+				 SET actual_reps = ?, weight = ?, completed = ?
+				 WHERE session_id = ? AND set_number = ?`,
+				u.ActualReps, u.Weight, completed, sessionID, u.SetNumber,
+			)
+			if err != nil {
+				return fmt.Errorf("apply set update: %w", err)
+			}
 		}
-		completed := 0
-		if u.Completed {
-			completed = 1
-		}
-		_, err := s.db.ExecContext(ctx,
-			`UPDATE exercise_sets
-			 SET actual_reps = ?, weight = ?, completed = ?
-			 WHERE session_id = ? AND set_number = ?`,
-			u.ActualReps, u.Weight, completed, sessionID, u.SetNumber,
-		)
-		if err != nil {
-			return fmt.Errorf("apply set update: %w", err)
-		}
-	}
-	return nil
+		return nil
+	})
 }
 
 func (s *ProgressionService) AddExerciseToSession(ctx context.Context, sessionID int64, exerciseType, exerciseName string, sets, targetReps int, weight float64) error {

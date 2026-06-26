@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 
+	appdb "stronglifts/internal/db"
+
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -37,7 +39,7 @@ var (
 )
 
 type AuthService struct {
-	db *sql.DB
+	db *appdb.DB
 }
 
 type UserSettings struct {
@@ -46,7 +48,7 @@ type UserSettings struct {
 	KeepAwake        bool
 }
 
-func NewAuthService(db *sql.DB) *AuthService {
+func NewAuthService(db *appdb.DB) *AuthService {
 	return &AuthService{db: db}
 }
 

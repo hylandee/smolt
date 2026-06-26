@@ -20,13 +20,13 @@ func main() {
 	}
 	defer database.Close()
 
-	// Create schema
-	if err := database.CreateSchema(); err != nil {
-		log.Fatalf("Failed to create schema: %v", err)
+	// Run migrations
+	if err := database.Migrate("migrations"); err != nil {
+		log.Fatalf("Failed to run migrations: %v", err)
 	}
 
 	// Initialize session store
-	sessionStore := auth.NewSessionStore(database.Conn())
+	sessionStore := auth.NewSessionStore(database)
 	if err := sessionStore.CleanupExpired(); err != nil {
 		log.Fatalf("Failed to clean up expired sessions: %v", err)
 	}

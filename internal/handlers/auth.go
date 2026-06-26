@@ -65,9 +65,9 @@ type AuthHandlers struct {
 func NewAuthHandlers(database *db.DB, sessionStore *auth.SessionStore) *AuthHandlers {
 	return &AuthHandlers{
 		db:           database,
-		authService:  auth.NewAuthService(database.Conn()),
+		authService:  auth.NewAuthService(database),
 		sessionStore: sessionStore,
-		progression:  workout.NewProgressionService(database.Conn()),
+		progression:  workout.NewProgressionService(database),
 	}
 }
 

@@ -1,12 +1,13 @@
 package auth
 
 import (
+	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
 	"fmt"
 	"time"
 
-	"crypto/rand"
+	appdb "stronglifts/internal/db"
 )
 
 const sessionDuration = 180 * 24 * time.Hour
@@ -17,10 +18,10 @@ type UserSession struct {
 }
 
 type SessionStore struct {
-	db *sql.DB
+	db *appdb.DB
 }
 
-func NewSessionStore(db *sql.DB) *SessionStore {
+func NewSessionStore(db *appdb.DB) *SessionStore {
 	return &SessionStore{db: db}
 }
 
