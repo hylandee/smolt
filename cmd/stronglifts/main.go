@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 	"stronglifts/internal/auth"
 	"stronglifts/internal/db"
 	"stronglifts/internal/handlers"
@@ -13,8 +15,18 @@ import (
 )
 
 func main() {
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = "stronglifts.db"
+	}
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "3000"
+	}
+	secureCookies := strings.EqualFold(os.Getenv("SECURE_COOKIES"), "true")
+
 	// Initialize database
-	database, err := db.New("stronglifts.db")
+	database, err := db.New(dbPath)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
@@ -39,7 +51,7 @@ func main() {
 	r.Use(middleware.Recoverer)
 
 	// Auth routes
-	authHandlers := handlers.NewAuthHandlers(database, sessionStore)
+	authHandlers := handlers.NewAuthHandlers(database, sessionStore, secureCookies)
 	r.Get("/register", authHandlers.Register)
 	r.Post("/register", authHandlers.Register)
 	r.Get("/login", authHandlers.Login)
@@ -88,7 +100,6 @@ func main() {
 	// Serve static assets and templates
 	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
 
-	port := 3000
-	fmt.Printf("Server running on http://localhost:%d\n", port)
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), r))
+	fmt.Printf("Server running on http://localhost:%s\n", port)
+	log.Fatal(http.ListenAndServe(":"+port, r))
 }

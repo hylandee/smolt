@@ -67,7 +67,7 @@ func (h *WorkoutHandlers) NextWorkout(w http.ResponseWriter, r *http.Request) {
 
 	program, weights, err := h.progression.NextWorkoutPlan(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to get next workout", http.StatusInternalServerError)
+		httpError(w, err, "Failed to get next workout", http.StatusInternalServerError)
 		return
 	}
 
@@ -91,7 +91,7 @@ func (h *WorkoutHandlers) WorkoutPage(w http.ResponseWriter, r *http.Request) {
 
 	sessionID, err := parseID(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid session ID", http.StatusBadRequest)
+		httpError(w, err, "Invalid session ID", http.StatusBadRequest)
 		return
 	}
 
@@ -103,32 +103,32 @@ func (h *WorkoutHandlers) WorkoutPage(w http.ResponseWriter, r *http.Request) {
 
 	session, err := h.progression.GetSession(r.Context(), sessionID)
 	if err != nil {
-		http.Error(w, "Failed to load session", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load session", http.StatusInternalServerError)
 		return
 	}
 	weightUnit, err := h.weightUnitForUser(r, user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load unit preference", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load unit preference", http.StatusInternalServerError)
 		return
 	}
 	distanceUnit, err := h.distanceUnitForUser(r, user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load distance unit preference", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load distance unit preference", http.StatusInternalServerError)
 		return
 	}
 	themePref, err := h.authService.GetThemePref(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load theme preference", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load theme preference", http.StatusInternalServerError)
 		return
 	}
 	keepAwakePref, err := h.authService.GetKeepAwakePref(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load keep awake preference", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load keep awake preference", http.StatusInternalServerError)
 		return
 	}
 	workouts, err := h.progression.ListStandaloneWorkouts(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load standalone workouts", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load standalone workouts", http.StatusInternalServerError)
 		return
 	}
 
@@ -194,7 +194,7 @@ func (h *WorkoutHandlers) StartWorkout(w http.ResponseWriter, r *http.Request) {
 		}
 		program, weights, planErr := h.progression.ProgramPlan(r.Context(), user.UserID, programName)
 		if planErr != nil {
-			http.Error(w, "Invalid program selection", http.StatusBadRequest)
+			httpError(w, planErr, "Invalid program selection", http.StatusBadRequest)
 			return
 		}
 		sessionID, err = h.progression.StartSession(r.Context(), user.UserID, program, weights)
@@ -207,13 +207,13 @@ func (h *WorkoutHandlers) StartWorkout(w http.ResponseWriter, r *http.Request) {
 	default:
 		program, weights, planErr := h.progression.NextWorkoutPlan(r.Context(), user.UserID)
 		if planErr != nil {
-			http.Error(w, "Failed to plan workout", http.StatusInternalServerError)
+			httpError(w, planErr, "Failed to plan workout", http.StatusInternalServerError)
 			return
 		}
 		sessionID, err = h.progression.StartSession(r.Context(), user.UserID, program, weights)
 	}
 	if err != nil {
-		http.Error(w, "Failed to start session", http.StatusInternalServerError)
+		httpError(w, err, "Failed to start session", http.StatusInternalServerError)
 		return
 	}
 
@@ -236,22 +236,22 @@ func (h *WorkoutHandlers) StandaloneEditor(w http.ResponseWriter, r *http.Reques
 	user := auth.UserFromContext(r)
 	weightUnit, err := h.weightUnitForUser(r, user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load unit preference", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load unit preference", http.StatusInternalServerError)
 		return
 	}
 	distanceUnit, err := h.distanceUnitForUser(r, user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load distance unit preference", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load distance unit preference", http.StatusInternalServerError)
 		return
 	}
 	themePref, err := h.authService.GetThemePref(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load theme preference", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load theme preference", http.StatusInternalServerError)
 		return
 	}
 	keepAwakePref, err := h.authService.GetKeepAwakePref(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load keep awake preference", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load keep awake preference", http.StatusInternalServerError)
 		return
 	}
 	h.renderStandaloneEditor(w, user, weightUnit, distanceUnit, nil, "", "/workout/standalone", "Save Standalone Workout", themePref, keepAwakePref)
@@ -262,32 +262,32 @@ func (h *WorkoutHandlers) EditStandaloneWorkout(w http.ResponseWriter, r *http.R
 	user := auth.UserFromContext(r)
 	workoutID, err := parseID(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid workout ID", http.StatusBadRequest)
+		httpError(w, err, "Invalid workout ID", http.StatusBadRequest)
 		return
 	}
 	detail, err := h.progression.GetStandaloneWorkout(r.Context(), user.UserID, workoutID)
 	if err != nil {
-		http.Error(w, "Standalone workout not found", http.StatusNotFound)
+		httpError(w, err, "Standalone workout not found", http.StatusNotFound)
 		return
 	}
 	weightUnit, err := h.weightUnitForUser(r, user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load unit preference", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load unit preference", http.StatusInternalServerError)
 		return
 	}
 	distanceUnit, err := h.distanceUnitForUser(r, user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load distance unit preference", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load distance unit preference", http.StatusInternalServerError)
 		return
 	}
 	themePref, err := h.authService.GetThemePref(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load theme preference", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load theme preference", http.StatusInternalServerError)
 		return
 	}
 	keepAwakePref, err := h.authService.GetKeepAwakePref(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load keep awake preference", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load keep awake preference", http.StatusInternalServerError)
 		return
 	}
 	h.renderStandaloneEditor(w, user, weightUnit, distanceUnit, detail, "", fmt.Sprintf("/workout/standalone/%d", workoutID), "Update Standalone Workout", themePref, keepAwakePref)
@@ -297,7 +297,7 @@ func (h *WorkoutHandlers) EditStandaloneWorkout(w http.ResponseWriter, r *http.R
 func (h *WorkoutHandlers) CreateStandaloneWorkout(w http.ResponseWriter, r *http.Request) {
 	user := auth.UserFromContext(r)
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		httpError(w, err, "Failed to parse form", http.StatusBadRequest)
 		return
 	}
 
@@ -325,16 +325,16 @@ func (h *WorkoutHandlers) UpdateStandaloneWorkout(w http.ResponseWriter, r *http
 	user := auth.UserFromContext(r)
 	workoutID, err := parseID(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid workout ID", http.StatusBadRequest)
+		httpError(w, err, "Invalid workout ID", http.StatusBadRequest)
 		return
 	}
 	detail, err := h.progression.GetStandaloneWorkout(r.Context(), user.UserID, workoutID)
 	if err != nil {
-		http.Error(w, "Standalone workout not found", http.StatusNotFound)
+		httpError(w, err, "Standalone workout not found", http.StatusNotFound)
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		httpError(w, err, "Failed to parse form", http.StatusBadRequest)
 		return
 	}
 
@@ -362,11 +362,11 @@ func (h *WorkoutHandlers) DeleteStandaloneWorkout(w http.ResponseWriter, r *http
 	user := auth.UserFromContext(r)
 	workoutID, err := parseID(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid workout ID", http.StatusBadRequest)
+		httpError(w, err, "Invalid workout ID", http.StatusBadRequest)
 		return
 	}
 	if err := h.progression.DeleteStandaloneWorkout(r.Context(), user.UserID, workoutID); err != nil {
-		http.Error(w, "Failed to delete standalone workout", http.StatusBadRequest)
+		httpError(w, err, "Failed to delete standalone workout", http.StatusBadRequest)
 		return
 	}
 	http.Redirect(w, r, "/workouts", http.StatusFound)
@@ -376,7 +376,7 @@ func (h *WorkoutHandlers) DeleteStandaloneWorkout(w http.ResponseWriter, r *http
 func (h *WorkoutHandlers) DeleteAllStandaloneWorkouts(w http.ResponseWriter, r *http.Request) {
 	user := auth.UserFromContext(r)
 	if _, err := h.progression.DeleteAllStandaloneWorkouts(r.Context(), user.UserID); err != nil {
-		http.Error(w, "Failed to delete standalone workouts", http.StatusInternalServerError)
+		httpError(w, err, "Failed to delete standalone workouts", http.StatusInternalServerError)
 		return
 	}
 	http.Redirect(w, r, "/workouts", http.StatusFound)
@@ -503,7 +503,7 @@ func (h *WorkoutHandlers) CompleteSet(w http.ResponseWriter, r *http.Request) {
 
 	sessionID, err := parseID(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid session ID", http.StatusBadRequest)
+		httpError(w, err, "Invalid session ID", http.StatusBadRequest)
 		return
 	}
 	setNum, err := strconv.Atoi(chi.URLParam(r, "n"))
@@ -549,14 +549,14 @@ func (h *WorkoutHandlers) CompleteSet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.progression.CompleteSet(r.Context(), sessionID, setNum, actualReps, weight); err != nil {
-		http.Error(w, "Failed to complete set", http.StatusInternalServerError)
+		httpError(w, err, "Failed to complete set", http.StatusInternalServerError)
 		return
 	}
 
 	if isHTMX(r) {
 		weightUnit, err := h.weightUnitForUser(r, user.UserID)
 		if err != nil {
-			http.Error(w, "Failed to load unit preference", http.StatusInternalServerError)
+			httpError(w, err, "Failed to load unit preference", http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Content-Type", "text/html")
@@ -578,7 +578,7 @@ func (h *WorkoutHandlers) FinishWorkout(w http.ResponseWriter, r *http.Request) 
 
 	sessionID, err := parseID(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid session ID", http.StatusBadRequest)
+		httpError(w, err, "Invalid session ID", http.StatusBadRequest)
 		return
 	}
 
@@ -590,7 +590,7 @@ func (h *WorkoutHandlers) FinishWorkout(w http.ResponseWriter, r *http.Request) 
 
 	updatesPayload, parseErr := parseTrackingSetUpdates(r)
 	if parseErr != nil {
-		http.Error(w, "Invalid workout payload", http.StatusBadRequest)
+		httpError(w, parseErr, "Invalid workout payload", http.StatusBadRequest)
 		return
 	}
 	if len(updatesPayload) > 0 {
@@ -604,14 +604,14 @@ func (h *WorkoutHandlers) FinishWorkout(w http.ResponseWriter, r *http.Request) 
 			})
 		}
 		if err := h.progression.ApplySetUpdates(r.Context(), sessionID, updates); err != nil {
-			http.Error(w, "Failed to save workout data", http.StatusInternalServerError)
+			httpError(w, err, "Failed to save workout data", http.StatusInternalServerError)
 			return
 		}
 	}
 
 	updates, err := h.progression.FinishSession(r.Context(), sessionID, user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to finish session", http.StatusInternalServerError)
+		httpError(w, err, "Failed to finish session", http.StatusInternalServerError)
 		return
 	}
 	summary, _ := h.progression.SessionFinishSummary(r.Context(), user.UserID, sessionID)
@@ -635,7 +635,7 @@ func (h *WorkoutHandlers) SaveTracking(w http.ResponseWriter, r *http.Request) {
 
 	sessionID, err := parseID(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid session ID", http.StatusBadRequest)
+		httpError(w, err, "Invalid session ID", http.StatusBadRequest)
 		return
 	}
 
@@ -647,7 +647,7 @@ func (h *WorkoutHandlers) SaveTracking(w http.ResponseWriter, r *http.Request) {
 
 	updatesPayload, parseErr := parseTrackingSetUpdates(r)
 	if parseErr != nil {
-		http.Error(w, "Invalid workout payload", http.StatusBadRequest)
+		httpError(w, parseErr, "Invalid workout payload", http.StatusBadRequest)
 		return
 	}
 
@@ -662,7 +662,7 @@ func (h *WorkoutHandlers) SaveTracking(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.progression.ApplySetUpdates(r.Context(), sessionID, updates); err != nil {
-		http.Error(w, "Failed to save workout data", http.StatusInternalServerError)
+		httpError(w, err, "Failed to save workout data", http.StatusInternalServerError)
 		return
 	}
 
@@ -675,7 +675,7 @@ func (h *WorkoutHandlers) AddExercise(w http.ResponseWriter, r *http.Request) {
 
 	sessionID, err := parseID(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid session ID", http.StatusBadRequest)
+		httpError(w, err, "Invalid session ID", http.StatusBadRequest)
 		return
 	}
 
@@ -686,7 +686,7 @@ func (h *WorkoutHandlers) AddExercise(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		httpError(w, err, "Failed to parse form", http.StatusBadRequest)
 		return
 	}
 
@@ -722,7 +722,7 @@ func (h *WorkoutHandlers) AddExercise(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.progression.AddExerciseToSession(r.Context(), sessionID, exerciseType, exerciseName, sets, targetReps, weight); err != nil {
-		http.Error(w, "Failed to add exercise", http.StatusInternalServerError)
+		httpError(w, err, "Failed to add exercise", http.StatusInternalServerError)
 		return
 	}
 
@@ -735,7 +735,7 @@ func (h *WorkoutHandlers) AddSetToExercise(w http.ResponseWriter, r *http.Reques
 
 	sessionID, err := parseID(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid session ID", http.StatusBadRequest)
+		httpError(w, err, "Invalid session ID", http.StatusBadRequest)
 		return
 	}
 
@@ -752,7 +752,7 @@ func (h *WorkoutHandlers) AddSetToExercise(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		httpError(w, err, "Failed to parse form", http.StatusBadRequest)
 		return
 	}
 
@@ -760,7 +760,7 @@ func (h *WorkoutHandlers) AddSetToExercise(w http.ResponseWriter, r *http.Reques
 	weight := parseNonNegativeFloatWithDefault(r.FormValue("weight"), -1)
 
 	if err := h.progression.AddSetToExerciseGroup(r.Context(), sessionID, groupIndex, targetReps, weight); err != nil {
-		http.Error(w, "Failed to add set", http.StatusBadRequest)
+		httpError(w, err, "Failed to add set", http.StatusBadRequest)
 		return
 	}
 
@@ -773,7 +773,7 @@ func (h *WorkoutHandlers) DeleteSet(w http.ResponseWriter, r *http.Request) {
 
 	sessionID, err := parseID(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid session ID", http.StatusBadRequest)
+		httpError(w, err, "Invalid session ID", http.StatusBadRequest)
 		return
 	}
 	setNum, err := strconv.Atoi(chi.URLParam(r, "n"))
@@ -789,7 +789,7 @@ func (h *WorkoutHandlers) DeleteSet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.progression.DeleteSet(r.Context(), sessionID, setNum); err != nil {
-		http.Error(w, "Failed to delete set", http.StatusBadRequest)
+		httpError(w, err, "Failed to delete set", http.StatusBadRequest)
 		return
 	}
 
@@ -806,7 +806,7 @@ func (h *WorkoutHandlers) DeloadExercise(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := h.progression.DeloadExercise(r.Context(), user.UserID, exerciseName); err != nil {
-		http.Error(w, "Failed to deload exercise", http.StatusBadRequest)
+		httpError(w, err, "Failed to deload exercise", http.StatusBadRequest)
 		return
 	}
 
@@ -823,14 +823,14 @@ func (h *WorkoutHandlers) ToggleSkipIncrement(w http.ResponseWriter, r *http.Req
 	}
 
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		httpError(w, err, "Failed to parse form", http.StatusBadRequest)
 		return
 	}
 	skip := strings.TrimSpace(r.FormValue("skip"))
 	shouldSkip := skip == "1" || strings.EqualFold(skip, "true")
 
 	if err := h.progression.SetSkipNextIncrement(r.Context(), user.UserID, exerciseName, shouldSkip); err != nil {
-		http.Error(w, "Failed to update skip increment", http.StatusBadRequest)
+		httpError(w, err, "Failed to update skip increment", http.StatusBadRequest)
 		return
 	}
 
@@ -842,14 +842,14 @@ func (h *WorkoutHandlers) ExportBackup(w http.ResponseWriter, r *http.Request) {
 	user := auth.UserFromContext(r)
 	backup, err := h.progression.ExportBackup(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to export backup", http.StatusInternalServerError)
+		httpError(w, err, "Failed to export backup", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Content-Disposition", "attachment; filename=smolt-backup.json")
 	if err := json.NewEncoder(w).Encode(backup); err != nil {
-		http.Error(w, "Failed to encode backup", http.StatusInternalServerError)
+		httpError(w, err, "Failed to encode backup", http.StatusInternalServerError)
 		return
 	}
 }
@@ -870,12 +870,12 @@ func (h *WorkoutHandlers) ImportBackup(w http.ResponseWriter, r *http.Request) {
 
 	var backup workout.BackupData
 	if err := json.Unmarshal([]byte(raw), &backup); err != nil {
-		http.Error(w, "Invalid backup payload", http.StatusBadRequest)
+		httpError(w, err, "Invalid backup payload", http.StatusBadRequest)
 		return
 	}
 
 	if err := h.progression.ImportBackup(r.Context(), user.UserID, backup); err != nil {
-		http.Error(w, "Failed to import backup", http.StatusBadRequest)
+		httpError(w, err, "Failed to import backup", http.StatusBadRequest)
 		return
 	}
 
@@ -888,7 +888,7 @@ func (h *WorkoutHandlers) FinishOpenWorkouts(w http.ResponseWriter, r *http.Requ
 
 	finishedCount, err := h.progression.FinishOpenSessions(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to finish open workouts", http.StatusInternalServerError)
+		httpError(w, err, "Failed to finish open workouts", http.StatusInternalServerError)
 		return
 	}
 
@@ -912,7 +912,7 @@ func (h *WorkoutHandlers) DeleteExercise(w http.ResponseWriter, r *http.Request)
 
 	sessionID, err := parseID(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid session ID", http.StatusBadRequest)
+		httpError(w, err, "Invalid session ID", http.StatusBadRequest)
 		return
 	}
 
@@ -929,7 +929,7 @@ func (h *WorkoutHandlers) DeleteExercise(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := h.progression.DeleteExerciseGroup(r.Context(), sessionID, groupIndex); err != nil {
-		http.Error(w, "Failed to delete exercise", http.StatusBadRequest)
+		httpError(w, err, "Failed to delete exercise", http.StatusBadRequest)
 		return
 	}
 
@@ -942,7 +942,7 @@ func (h *WorkoutHandlers) ReorderExercises(w http.ResponseWriter, r *http.Reques
 
 	sessionID, err := parseID(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid session ID", http.StatusBadRequest)
+		httpError(w, err, "Invalid session ID", http.StatusBadRequest)
 		return
 	}
 
@@ -957,12 +957,12 @@ func (h *WorkoutHandlers) ReorderExercises(w http.ResponseWriter, r *http.Reques
 		To   int `json:"to"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "Invalid reorder payload", http.StatusBadRequest)
+		httpError(w, err, "Invalid reorder payload", http.StatusBadRequest)
 		return
 	}
 
 	if err := h.progression.ReorderExerciseGroups(r.Context(), sessionID, body.From, body.To); err != nil {
-		http.Error(w, "Failed to reorder exercises", http.StatusBadRequest)
+		httpError(w, err, "Failed to reorder exercises", http.StatusBadRequest)
 		return
 	}
 
@@ -979,22 +979,22 @@ func (h *WorkoutHandlers) ProgressCharts(w http.ResponseWriter, r *http.Request)
 
 	strengthSeries, err := h.progression.StrengthProgressSeries(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load progress charts", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load progress charts", http.StatusInternalServerError)
 		return
 	}
 	cardioSeries, err := h.progression.CardioProgressSeries(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load cardio charts", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load cardio charts", http.StatusInternalServerError)
 		return
 	}
 	seriesJSONBytes, err := json.Marshal(strengthSeries)
 	if err != nil {
-		http.Error(w, "Failed to serialize progress charts", http.StatusInternalServerError)
+		httpError(w, err, "Failed to serialize progress charts", http.StatusInternalServerError)
 		return
 	}
 	cardioJSONBytes, err := json.Marshal(cardioSeries)
 	if err != nil {
-		http.Error(w, "Failed to serialize cardio charts", http.StatusInternalServerError)
+		httpError(w, err, "Failed to serialize cardio charts", http.StatusInternalServerError)
 		return
 	}
 
@@ -1030,7 +1030,7 @@ func (h *WorkoutHandlers) DeleteWorkout(w http.ResponseWriter, r *http.Request) 
 
 	sessionID, err := parseID(chi.URLParam(r, "id"))
 	if err != nil {
-		http.Error(w, "Invalid session ID", http.StatusBadRequest)
+		httpError(w, err, "Invalid session ID", http.StatusBadRequest)
 		return
 	}
 
@@ -1041,7 +1041,7 @@ func (h *WorkoutHandlers) DeleteWorkout(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err := h.progression.DeleteSession(r.Context(), sessionID); err != nil {
-		http.Error(w, "Failed to delete session", http.StatusInternalServerError)
+		httpError(w, err, "Failed to delete session", http.StatusInternalServerError)
 		return
 	}
 
@@ -1057,50 +1057,50 @@ func (h *WorkoutHandlers) DeleteWorkout(w http.ResponseWriter, r *http.Request) 
 func (h *WorkoutHandlers) renderDashboard(w http.ResponseWriter, r *http.Request, user *auth.UserSession) {
 	program, weights, err := h.progression.NextWorkoutPlan(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load workout plan", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load workout plan", http.StatusInternalServerError)
 		return
 	}
 	workoutA, weightsA, err := h.progression.ProgramPlan(r.Context(), user.UserID, "A")
 	if err != nil {
-		http.Error(w, "Failed to load workout A", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load workout A", http.StatusInternalServerError)
 		return
 	}
 	workoutB, weightsB, err := h.progression.ProgramPlan(r.Context(), user.UserID, "B")
 	if err != nil {
-		http.Error(w, "Failed to load workout B", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load workout B", http.StatusInternalServerError)
 		return
 	}
 	customWorkouts, err := h.progression.ListStandaloneWorkouts(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load standalone workouts", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load standalone workouts", http.StatusInternalServerError)
 		return
 	}
 	currentPage := parseDashboardPage(r)
 	totalSessions, err := h.progression.CountSessions(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load session count", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load session count", http.StatusInternalServerError)
 		return
 	}
 	currentPage = clampDashboardPage(currentPage, totalSessions)
 	offset := (currentPage - 1) * dashboardRecentSessionsPageSize
 	recentSessions, err := h.progression.ListSessionHistoryPage(r.Context(), user.UserID, dashboardRecentSessionsPageSize, offset)
 	if err != nil {
-		http.Error(w, "Failed to load session history", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load session history", http.StatusInternalServerError)
 		return
 	}
 	openWorkoutCount, err := h.progression.CountOpenSessions(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load open workouts", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load open workouts", http.StatusInternalServerError)
 		return
 	}
 	themePref, err := h.authService.GetThemePref(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load theme preference", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load theme preference", http.StatusInternalServerError)
 		return
 	}
 	keepAwakePref, err := h.authService.GetKeepAwakePref(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load keep awake preference", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load keep awake preference", http.StatusInternalServerError)
 		return
 	}
 
@@ -1154,7 +1154,7 @@ func (h *WorkoutHandlers) renderDashboard(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Content-Type", "text/html")
 	weightUnit, err := h.weightUnitForUser(r, user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load unit preference", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load unit preference", http.StatusInternalServerError)
 		return
 	}
 	distanceUnit, err := h.distanceUnitForUser(r, user.UserID)

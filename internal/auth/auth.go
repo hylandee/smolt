@@ -32,7 +32,8 @@ var (
 	ErrUserExists         = errors.New("user already exists")
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrInvalidUsername    = errors.New("username must be at least 3 characters")
-	ErrInvalidPassword    = errors.New("password must be at least 3 characters")
+	ErrInvalidPassword    = errors.New("password must be at least 8 characters")
+	ErrPasswordTooLong    = errors.New("password must be 72 characters or fewer")
 	ErrPasswordMismatch   = errors.New("passwords do not match")
 	ErrPasswordUnchanged  = errors.New("new password must be different from current password")
 	ErrUserDeleted        = errors.New("user account is deleted")
@@ -106,8 +107,11 @@ func (a *AuthService) RegisterUser(ctx context.Context, username, password strin
 	if len(username) < 3 {
 		return 0, ErrInvalidUsername
 	}
-	if len(password) < 3 {
+	if len(password) < 8 {
 		return 0, ErrInvalidPassword
+	}
+	if len(password) > 72 {
+		return 0, ErrPasswordTooLong
 	}
 
 	// Hash password
@@ -372,8 +376,11 @@ func (a *AuthService) UpdateKeepAwakePref(ctx context.Context, userID int, keepA
 
 // ChangePassword updates a user's password after verifying the current password.
 func (a *AuthService) ChangePassword(ctx context.Context, userID int, currentPassword, newPassword, confirmPassword string) error {
-	if len(newPassword) < 3 {
+	if len(newPassword) < 8 {
 		return ErrInvalidPassword
+	}
+	if len(newPassword) > 72 {
+		return ErrPasswordTooLong
 	}
 	if newPassword != confirmPassword {
 		return ErrPasswordMismatch

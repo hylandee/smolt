@@ -56,28 +56,44 @@ func buildDashboardPageLinks(currentPage, totalSessions int) []dashboardPageLink
 }
 
 type AuthHandlers struct {
-	db           *db.DB
-	authService  *auth.AuthService
-	sessionStore *auth.SessionStore
-	progression  *workout.ProgressionService
+	db            *db.DB
+	authService   *auth.AuthService
+	sessionStore  *auth.SessionStore
+	progression   *workout.ProgressionService
+	secureCookies bool
 }
 
-func NewAuthHandlers(database *db.DB, sessionStore *auth.SessionStore) *AuthHandlers {
+func NewAuthHandlers(database *db.DB, sessionStore *auth.SessionStore, secureCookies bool) *AuthHandlers {
 	return &AuthHandlers{
-		db:           database,
-		authService:  auth.NewAuthService(database),
-		sessionStore: sessionStore,
-		progression:  workout.NewProgressionService(database),
+		db:            database,
+		authService:   auth.NewAuthService(database),
+		sessionStore:  sessionStore,
+		progression:   workout.NewProgressionService(database),
+		secureCookies: secureCookies,
 	}
 }
 
-func writeSessionCookie(w http.ResponseWriter, sessionID string) {
+func (h *AuthHandlers) writeSessionCookie(w http.ResponseWriter, sessionID string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     auth.GetSessionCookieName(),
 		Value:    sessionID,
 		Path:     "/",
 		MaxAge:   auth.SessionMaxAgeSeconds(),
 		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   h.secureCookies,
+	})
+}
+
+func (h *AuthHandlers) clearSessionCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     auth.GetSessionCookieName(),
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   h.secureCookies,
 	})
 }
 
@@ -98,22 +114,22 @@ func parseWeight(formVal string, fallback float64) (float64, error) {
 func (h *AuthHandlers) renderProfile(w http.ResponseWriter, r *http.Request, user *auth.UserSession, errorMsg, savedMsg string) {
 	unitPref, err := h.authService.GetUnitPref(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load profile", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load profile", http.StatusInternalServerError)
 		return
 	}
 	distanceUnitPref, err := h.authService.GetDistanceUnitPref(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load profile", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load profile", http.StatusInternalServerError)
 		return
 	}
 	themePref, err := h.authService.GetThemePref(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load profile", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load profile", http.StatusInternalServerError)
 		return
 	}
 	keepAwakePref, err := h.authService.GetKeepAwakePref(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load profile", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load profile", http.StatusInternalServerError)
 		return
 	}
 
@@ -138,7 +154,7 @@ func (h *AuthHandlers) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		httpError(w, err, "Failed to parse form", http.StatusBadRequest)
 		return
 	}
 
@@ -159,10 +175,6 @@ func (h *AuthHandlers) Register(w http.ResponseWriter, r *http.Request) {
 		renderErr("Username must be at least 3 characters")
 		return
 	}
-	if len(password) < 3 {
-		renderErr("Password must be at least 3 characters")
-		return
-	}
 
 	confirm := r.FormValue("confirm")
 	if confirm != "" && confirm != password {
@@ -175,8 +187,16 @@ func (h *AuthHandlers) Register(w http.ResponseWriter, r *http.Request) {
 		renderErr("Username already taken")
 		return
 	}
+	if err == auth.ErrInvalidPassword {
+		renderErr("Password must be at least 8 characters")
+		return
+	}
+	if err == auth.ErrPasswordTooLong {
+		renderErr("Password must be 72 characters or fewer")
+		return
+	}
 	if err != nil {
-		http.Error(w, "Registration failed", http.StatusInternalServerError)
+		httpError(w, err, "Registration failed", http.StatusInternalServerError)
 		return
 	}
 
@@ -192,7 +212,7 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		httpError(w, err, "Failed to parse form", http.StatusBadRequest)
 		return
 	}
 
@@ -220,11 +240,11 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 		Username: user.Username,
 	})
 	if err != nil {
-		http.Error(w, "Failed to create session", http.StatusInternalServerError)
+		httpError(w, err, "Failed to create session", http.StatusInternalServerError)
 		return
 	}
 
-	writeSessionCookie(w, sessionID)
+	h.writeSessionCookie(w, sessionID)
 
 	http.Redirect(w, r, "/workouts", http.StatusFound)
 }
@@ -236,13 +256,7 @@ func (h *AuthHandlers) Logout(w http.ResponseWriter, r *http.Request) {
 		_ = h.sessionStore.Delete(cookie.Value)
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     auth.GetSessionCookieName(),
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-	})
+	h.clearSessionCookie(w)
 
 	http.Redirect(w, r, "/login", http.StatusFound)
 }
@@ -256,23 +270,16 @@ func (h *AuthHandlers) DeleteAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.authService.SoftDeleteUser(r.Context(), user.UserID); err != nil {
-		http.Error(w, "Failed to delete account", http.StatusInternalServerError)
+		httpError(w, err, "Failed to delete account", http.StatusInternalServerError)
 		return
 	}
 
-	// Invalidate all active sessions for this user.
 	if err := h.sessionStore.DeleteByUserID(user.UserID); err != nil {
-		http.Error(w, "Failed to delete account sessions", http.StatusInternalServerError)
+		httpError(w, err, "Failed to delete account sessions", http.StatusInternalServerError)
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     auth.GetSessionCookieName(),
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-	})
+	h.clearSessionCookie(w)
 
 	http.Redirect(w, r, "/login", http.StatusFound)
 }
@@ -287,7 +294,7 @@ func (h *AuthHandlers) Profile(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodPost {
 		if err := r.ParseForm(); err != nil {
-			http.Error(w, "Failed to parse form", http.StatusBadRequest)
+			httpError(w, err, "Failed to parse form", http.StatusBadRequest)
 			return
 		}
 		switch r.FormValue("action") {
@@ -305,7 +312,9 @@ func (h *AuthHandlers) Profile(w http.ResponseWriter, r *http.Request) {
 				case auth.ErrInvalidCredentials:
 					message = "Current password is incorrect"
 				case auth.ErrInvalidPassword:
-					message = "New password must be at least 3 characters"
+					message = "New password must be at least 8 characters"
+				case auth.ErrPasswordTooLong:
+					message = "New password must be 72 characters or fewer"
 				case auth.ErrPasswordMismatch:
 					message = "New passwords do not match"
 				case auth.ErrPasswordUnchanged:
@@ -314,17 +323,16 @@ func (h *AuthHandlers) Profile(w http.ResponseWriter, r *http.Request) {
 				h.renderProfile(w, r, user, message, "")
 				return
 			}
-			// Drop other sessions so only the current request remains trusted.
 			if err := h.sessionStore.DeleteByUserID(user.UserID); err != nil {
-				http.Error(w, "Failed to rotate sessions", http.StatusInternalServerError)
+				httpError(w, err, "Failed to rotate sessions", http.StatusInternalServerError)
 				return
 			}
 			sessionID, err := h.sessionStore.Create(*user)
 			if err != nil {
-				http.Error(w, "Failed to create session", http.StatusInternalServerError)
+				httpError(w, err, "Failed to create session", http.StatusInternalServerError)
 				return
 			}
-			writeSessionCookie(w, sessionID)
+			h.writeSessionCookie(w, sessionID)
 			http.Redirect(w, r, "/profile?password_saved=1", http.StatusFound)
 			return
 		default:
@@ -380,7 +388,7 @@ func (h *AuthHandlers) Onboarding(w http.ResponseWriter, r *http.Request) {
 
 	initialized, err := h.progression.IsInitialized(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load onboarding state", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load onboarding state", http.StatusInternalServerError)
 		return
 	}
 	if initialized && r.Method == http.MethodGet {
@@ -420,7 +428,7 @@ func (h *AuthHandlers) Onboarding(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		httpError(w, err, "Failed to parse form", http.StatusBadRequest)
 		return
 	}
 
@@ -474,7 +482,7 @@ func (h *AuthHandlers) Onboarding(w http.ResponseWriter, r *http.Request) {
 		workout.OHP.Name:        press,
 		workout.Deadlift.Name:   deadlift,
 	}); err != nil {
-		http.Error(w, "Failed to save onboarding", http.StatusInternalServerError)
+		httpError(w, err, "Failed to save onboarding", http.StatusInternalServerError)
 		return
 	}
 
@@ -491,7 +499,7 @@ func (h *AuthHandlers) Dashboard(w http.ResponseWriter, r *http.Request) {
 
 	initialized, err := h.progression.IsInitialized(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load setup state", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load setup state", http.StatusInternalServerError)
 		return
 	}
 	if !initialized {
@@ -501,50 +509,50 @@ func (h *AuthHandlers) Dashboard(w http.ResponseWriter, r *http.Request) {
 
 	program, weights, err := h.progression.NextWorkoutPlan(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load workout plan", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load workout plan", http.StatusInternalServerError)
 		return
 	}
 	workoutA, weightsA, err := h.progression.ProgramPlan(r.Context(), user.UserID, "A")
 	if err != nil {
-		http.Error(w, "Failed to load workout A", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load workout A", http.StatusInternalServerError)
 		return
 	}
 	workoutB, weightsB, err := h.progression.ProgramPlan(r.Context(), user.UserID, "B")
 	if err != nil {
-		http.Error(w, "Failed to load workout B", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load workout B", http.StatusInternalServerError)
 		return
 	}
 	customWorkouts, err := h.progression.ListStandaloneWorkouts(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load standalone workouts", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load standalone workouts", http.StatusInternalServerError)
 		return
 	}
 	currentPage := parseDashboardPage(r)
 	totalSessions, err := h.progression.CountSessions(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load session count", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load session count", http.StatusInternalServerError)
 		return
 	}
 	currentPage = clampDashboardPage(currentPage, totalSessions)
 	offset := (currentPage - 1) * dashboardRecentSessionsPageSize
 	recentSessions, err := h.progression.ListSessionHistoryPage(r.Context(), user.UserID, dashboardRecentSessionsPageSize, offset)
 	if err != nil {
-		http.Error(w, "Failed to load session history", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load session history", http.StatusInternalServerError)
 		return
 	}
 	openWorkoutCount, err := h.progression.CountOpenSessions(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load open workouts", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load open workouts", http.StatusInternalServerError)
 		return
 	}
 	themePref, err := h.authService.GetThemePref(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load theme preference", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load theme preference", http.StatusInternalServerError)
 		return
 	}
 	keepAwakePref, err := h.authService.GetKeepAwakePref(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load keep awake preference", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load keep awake preference", http.StatusInternalServerError)
 		return
 	}
 
@@ -583,7 +591,7 @@ func (h *AuthHandlers) Dashboard(w http.ResponseWriter, r *http.Request) {
 
 	unitPref, err := h.authService.GetUnitPref(r.Context(), user.UserID)
 	if err != nil {
-		http.Error(w, "Failed to load unit preference", http.StatusInternalServerError)
+		httpError(w, err, "Failed to load unit preference", http.StatusInternalServerError)
 		return
 	}
 	weightUnit := "lb"
