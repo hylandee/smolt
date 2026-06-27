@@ -239,7 +239,25 @@
     var MAX_WEIGHT = weightUnit === 'kg' ? 220 : 500;
     var initialWorkout = {{if .ExistingWorkoutJSON}}{{.ExistingWorkoutJSON}}{{else}}null{{end}};
     var cardioTypes = ['treadmill', 'staircase', 'bike', 'elliptical'];
-    var strengthOptions = ['Squat', 'Bench Press', 'Deadlift', 'Barbell Row', 'OHP'];
+    var strengthGroups = [
+      { label: 'Barbell', options: [
+        'Squat', 'Bench Press', 'Deadlift', 'OHP', 'Barbell Row',
+        'Romanian Deadlift', 'Front Squat', 'Sumo Deadlift',
+        'Incline Bench', 'Close Grip Bench', 'Pendlay Row', 'Good Mornings'
+      ]},
+      { label: 'Dumbbell', options: [
+        'DB Press', 'Incline DB Press', 'DB Row', 'DB Fly',
+        'Goblet Squat', 'DB Curl', 'DB Lateral Raise', 'DB Skull Crusher'
+      ]},
+      { label: 'Machine / Cable', options: [
+        'Lat Pulldown', 'Seated Cable Row', 'Leg Press', 'Leg Curl',
+        'Leg Extension', 'Cable Fly', 'Tricep Pushdown', 'Face Pull'
+      ]},
+      { label: 'Bodyweight', options: [
+        'Pull Ups', 'Chin Ups', 'Dips', 'Push Ups', 'Lunges', 'Bulgarian Split Squat'
+      ]}
+    ];
+    var CUSTOM_EX_KEY = 'smolt-custom-exercises';
     var weightSteps = weightUnit === 'kg' ? [2.5, 5] : [5, 10];
     var distanceSteps = distanceUnit === 'km' ? [5, 2.5] : [1, 0.5];
 
@@ -253,6 +271,45 @@
       var v = Number(distanceValue) || 0;
       if (distanceUnit === 'km') return Math.round((v / 1.60934) * 100) / 100;
       return v;
+    }
+
+    function loadCustomExercises() {
+      try { return JSON.parse(localStorage.getItem(CUSTOM_EX_KEY) || '[]'); } catch(e) { return []; }
+    }
+    function saveCustomExercise(name) {
+      if (!name) return;
+      var list = loadCustomExercises().filter(function(n) { return n !== name; });
+      list.unshift(name);
+      localStorage.setItem(CUSTOM_EX_KEY, JSON.stringify(list.slice(0, 20)));
+    }
+    function allKnownOptions() {
+      var known = [];
+      strengthGroups.forEach(function(g) { known = known.concat(g.options); });
+      return known;
+    }
+    function buildStrengthSelectHTML(selectedName) {
+      var customExercises = loadCustomExercises();
+      var html = '';
+      if (customExercises.length) {
+        html += '<optgroup label="My Exercises">';
+        customExercises.forEach(function(name) {
+          html += '<option value="' + name + '"' + (name === selectedName ? ' selected' : '') + '>' + name + '</option>';
+        });
+        html += '</optgroup>';
+      }
+      strengthGroups.forEach(function(g) {
+        html += '<optgroup label="' + g.label + '">';
+        g.options.forEach(function(name) {
+          html += '<option value="' + name + '"' + (name === selectedName ? ' selected' : '') + '>' + name + '</option>';
+        });
+        html += '</optgroup>';
+      });
+      html += '<optgroup label="Custom"><option value="__custom__">Custom...</option></optgroup>';
+      return html;
+    }
+    function updateRowTitle(row, name) {
+      var title = row.querySelector('.standalone-row-title');
+      if (title) title.textContent = name || 'Strength';
     }
 
     function intStepperHTML(attr, value) {
@@ -371,19 +428,9 @@
         moveRow(row, 1);
       }, 'Move down'));
       var deleteBtn = createActionButton('Delete', 'standalone-action-btn delete', function() {
-        if (deleteBtn.getAttribute('data-confirming-delete') !== 'true') {
-          deleteBtn.setAttribute('data-confirming-delete', 'true');
-          deleteBtn.textContent = 'u sure?';
-          setTimeout(function() {
-            if (deleteBtn.getAttribute('data-confirming-delete') === 'true') {
-              deleteBtn.removeAttribute('data-confirming-delete');
-              deleteBtn.textContent = 'Delete';
-            }
-          }, 2200);
-          return;
-        }
-
-        row.remove();
+        smoltConfirm('Delete exercise', 'Remove this exercise from the workout?', 'Delete').then(function(ok) {
+          if (ok) row.remove();
+        });
       }, 'Delete exercise');
       wrap.appendChild(deleteBtn);
 
@@ -502,31 +549,37 @@
     function addStrengthRow(initialItem) {
       var row = rowShell();
 
-      var strengthSelect = strengthOptions.map(function(name) {
-        return '<option value="' + name + '">' + name + '</option>';
-      }).join('');
+      var initialName = (initialItem && initialItem.ExerciseName) ? initialItem.ExerciseName : '';
+      var knownOptions = allKnownOptions();
+      var customExercises = loadCustomExercises();
+      var allKnown = knownOptions.concat(customExercises);
+      var isCustomName = initialName && allKnown.indexOf(initialName) === -1;
+      var selectValue = isCustomName ? '__custom__' : (initialName || knownOptions[0]);
 
       var initialScheme = (initialItem && initialItem.SetScheme && initialItem.SetScheme.length) ? initialItem.SetScheme : null;
-      var isCustom = !!(initialScheme && (
+      var isCustomScheme = !!(initialScheme && (
         initialScheme.length !== 5 ||
         initialScheme.some(function(s) { return s.TargetReps !== initialScheme[0].TargetReps || s.Weight !== initialScheme[0].Weight; })
       ));
 
-      // Simple-mode defaults
       var simSets = initialScheme ? initialScheme.length : 5;
       var simReps = initialScheme ? initialScheme[0].TargetReps : 5;
       var simWeight = initialScheme ? initialScheme[0].Weight : defaultWeight;
 
+      var selectHTML = buildStrengthSelectHTML(isCustomName ? null : selectValue);
+
       row.insertAdjacentHTML('beforeend',
         '<div class="standalone-row-head">' +
-          '<div class="standalone-row-title">Strength</div>' +
+          '<div class="standalone-row-title">' + (initialName || knownOptions[0]) + '</div>' +
         '</div>' +
         '<div class="standalone-row-grid">' +
           '<input type="hidden" name="exercise_type" value="strength">' +
           '<input type="hidden" name="set_scheme_json" value="">' +
           '<div class="form-group" style="margin-bottom:0;">' +
             '<label>Exercise</label>' +
-            '<select name="exercise_name">' + strengthSelect + '</select>' +
+            '<select data-exercise-select>' + selectHTML + '</select>' +
+            '<input type="hidden" name="exercise_name" data-exercise-name-hidden value="' + (isCustomName ? '' : selectValue) + '">' +
+            '<input type="text" data-exercise-name-custom placeholder="Exercise name" style="margin-top:.4rem;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:.5rem .75rem;font-size:1rem;width:100%;' + (isCustomName ? '' : 'display:none;') + '">' +
           '</div>' +
           '<div class="standalone-scheme-simple" style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap;">' +
             '<div class="form-group" style="margin-bottom:0;">' +
@@ -575,32 +628,61 @@
         }
       }
 
-      if (initialItem && initialItem.ExerciseName) {
-        row.querySelector('select[name="exercise_name"]').value = initialItem.ExerciseName;
+      // Wire exercise select + custom input
+      var exerciseSelect = row.querySelector('[data-exercise-select]');
+      var exerciseNameHidden = row.querySelector('[data-exercise-name-hidden]');
+      var exerciseNameCustom = row.querySelector('[data-exercise-name-custom]');
+
+      if (isCustomName) {
+        exerciseSelect.value = '__custom__';
+        exerciseNameHidden.removeAttribute('name');
+        exerciseNameCustom.setAttribute('name', 'exercise_name');
+        exerciseNameCustom.value = initialName;
+        exerciseNameCustom.style.display = '';
       }
+
+      exerciseSelect.addEventListener('change', function() {
+        if (exerciseSelect.value === '__custom__') {
+          exerciseNameHidden.removeAttribute('name');
+          exerciseNameCustom.setAttribute('name', 'exercise_name');
+          exerciseNameCustom.style.display = '';
+          exerciseNameCustom.required = true;
+          exerciseNameCustom.value = '';
+          exerciseNameCustom.focus();
+          updateRowTitle(row, 'Custom');
+        } else {
+          exerciseNameHidden.setAttribute('name', 'exercise_name');
+          exerciseNameHidden.value = exerciseSelect.value;
+          exerciseNameCustom.removeAttribute('name');
+          exerciseNameCustom.style.display = 'none';
+          exerciseNameCustom.required = false;
+          updateRowTitle(row, exerciseSelect.value);
+        }
+      });
+
+      exerciseNameCustom.addEventListener('input', function() {
+        updateRowTitle(row, exerciseNameCustom.value || 'Custom');
+      });
 
       row.querySelector('.standalone-row-head').appendChild(rowActions(row));
 
-      // Simple mode inputs → rebuild set list when changed
       var simpleSection = row.querySelector('.standalone-scheme-simple');
       attachStepperHandlers(simpleSection.querySelector('[data-simple-sets]').closest('.stepper-wrap'), function() { applySimpleScheme(row); });
       attachStepperHandlers(simpleSection.querySelector('[data-simple-reps]').closest('.stepper-wrap'), function() { applySimpleScheme(row); });
       attachStepperHandlers(simpleSection.querySelector('[data-simple-weight]').closest('.stepper-wrap'), function() { applySimpleScheme(row); });
 
-      // Customize button → switch to custom mode
       row.querySelector('[data-customize-btn]').addEventListener('click', function() {
-        applySimpleScheme(row); // sync set list from simple fields first
+        applySimpleScheme(row);
         row.querySelector('.standalone-scheme-simple').style.display = 'none';
         row.querySelector('.standalone-scheme-custom').style.display = '';
         setList.style.display = '';
       });
 
-      // Simple button → switch back to simple mode
       row.querySelector('[data-simple-btn]').addEventListener('click', function() {
         row.querySelector('.standalone-scheme-simple').style.display = 'flex';
         row.querySelector('.standalone-scheme-custom').style.display = 'none';
         setList.style.display = 'none';
-        syncStrengthSummary(row); // hidden sets still drive hidden fields
+        syncStrengthSummary(row);
       });
 
       row.querySelector('[data-add-set]').addEventListener('click', function() {
@@ -613,7 +695,7 @@
         syncStrengthSummary(row);
       });
 
-      if (isCustom) {
+      if (isCustomScheme) {
         row.querySelector('.standalone-scheme-simple').style.display = 'none';
         row.querySelector('.standalone-scheme-custom').style.display = '';
         setList.style.display = '';
@@ -917,6 +999,17 @@
 
     addStrengthBtn.addEventListener('click', addStrengthRow);
     addCardioBtn.addEventListener('click', function() { addCardioRow('treadmill'); });
+
+    var standaloneForm = document.getElementById('standalone-form');
+    if (standaloneForm) {
+      standaloneForm.addEventListener('submit', function() {
+        list.querySelectorAll('[data-exercise-name-custom]').forEach(function(input) {
+          if (input.getAttribute('name') === 'exercise_name' && input.value.trim()) {
+            saveCustomExercise(input.value.trim());
+          }
+        });
+      });
+    }
 
     if (initialWorkout && initialWorkout.Items && initialWorkout.Items.length) {
       initialWorkout.Items.forEach(function(item) {
