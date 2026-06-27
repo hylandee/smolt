@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -609,6 +610,12 @@ func (h *AuthHandlers) Dashboard(w http.ResponseWriter, r *http.Request) {
 		weightUnit = "kg"
 	}
 
+	todayWeightKg, hasTodayWeight, err := h.progression.TodayBodyWeight(r.Context(), user.UserID)
+	if err != nil {
+		slog.Error("failed to load today body weight", "err", err)
+		todayWeightKg, hasTodayWeight = 0, false
+	}
+
 	w.Header().Set("Content-Type", "text/html")
 	templates.Render(w, "dashboard.html", map[string]any{
 		"User":               user,
@@ -623,5 +630,7 @@ func (h *AuthHandlers) Dashboard(w http.ResponseWriter, r *http.Request) {
 		"PageLinks":          buildDashboardPageLinks(currentPage, totalSessions),
 		"OpenWorkoutCount":   openWorkoutCount,
 		"WeightUnit":         weightUnit,
+		"TodayWeightKg":      todayWeightKg,
+		"HasTodayWeight":     hasTodayWeight,
 	})
 }

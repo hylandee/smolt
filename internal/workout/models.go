@@ -58,6 +58,11 @@ func ProgramByName(name string) (Program, bool) {
 	}
 }
 
+type BodyWeightReading struct {
+	RecordedAt string
+	WeightKg   float64
+}
+
 // SetsPerExercise is the standard SL5x5 set count
 const SetsPerExercise = 5
 

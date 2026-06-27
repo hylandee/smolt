@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -135,6 +136,11 @@ func (h *WorkoutHandlers) WorkoutPage(w http.ResponseWriter, r *http.Request) {
 		httpError(w, err, "Failed to load standalone workouts", http.StatusInternalServerError)
 		return
 	}
+	todayWeightKg, hasTodayWeight, err := h.progression.TodayBodyWeight(r.Context(), user.UserID)
+	if err != nil {
+		slog.Error("failed to load today body weight", "err", err)
+		todayWeightKg, hasTodayWeight = 0, false
+	}
 
 	w.Header().Set("Content-Type", "text/html")
 	templates.Render(w, "workout.html", map[string]any{
@@ -145,6 +151,8 @@ func (h *WorkoutHandlers) WorkoutPage(w http.ResponseWriter, r *http.Request) {
 		"WeightUnit":         weightUnit,
 		"DistanceUnit":       distanceUnit,
 		"StandaloneWorkouts": workouts,
+		"TodayWeightKg":      todayWeightKg,
+		"HasTodayWeight":     hasTodayWeight,
 	})
 }
 
@@ -1004,6 +1012,16 @@ func (h *WorkoutHandlers) ProgressCharts(w http.ResponseWriter, r *http.Request)
 		httpError(w, err, "Failed to serialize cardio charts", http.StatusInternalServerError)
 		return
 	}
+	bodyWeightSeries, err := h.progression.BodyWeightSeries(r.Context(), user.UserID)
+	if err != nil {
+		httpError(w, err, "Failed to load body weight series", http.StatusInternalServerError)
+		return
+	}
+	bodyWeightJSONBytes, err := json.Marshal(bodyWeightSeries)
+	if err != nil {
+		httpError(w, err, "Failed to serialize body weight series", http.StatusInternalServerError)
+		return
+	}
 
 	distanceUnit, err := h.distanceUnitForUser(r, user.UserID)
 	if err != nil {
@@ -1017,15 +1035,21 @@ func (h *WorkoutHandlers) ProgressCharts(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		keepAwakePref = true
 	}
+	weightUnit, err := h.weightUnitForUser(r, user.UserID)
+	if err != nil {
+		weightUnit = "lb"
+	}
 
 	w.Header().Set("Content-Type", "text/html")
 	templates.Render(w, "progress_charts.html", map[string]any{
-		"User":               user,
-		"ThemePref":          themePref,
-		"KeepAwakePref":      keepAwakePref,
-		"StrengthSeriesJSON": string(seriesJSONBytes),
-		"CardioSeriesJSON":   string(cardioJSONBytes),
-		"DistanceUnit":       distanceUnit,
+		"User":                 user,
+		"ThemePref":            themePref,
+		"KeepAwakePref":        keepAwakePref,
+		"StrengthSeriesJSON":   string(seriesJSONBytes),
+		"CardioSeriesJSON":     string(cardioJSONBytes),
+		"BodyWeightSeriesJSON": string(bodyWeightJSONBytes),
+		"DistanceUnit":         distanceUnit,
+		"WeightUnit":           weightUnit,
 	})
 }
 
@@ -1168,6 +1192,11 @@ func (h *WorkoutHandlers) renderDashboard(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		distanceUnit = "mi"
 	}
+	todayWeightKg, hasTodayWeight, err := h.progression.TodayBodyWeight(r.Context(), user.UserID)
+	if err != nil {
+		slog.Error("failed to load today body weight", "err", err)
+		todayWeightKg, hasTodayWeight = 0, false
+	}
 	templates.Render(w, "dashboard.html", map[string]any{
 		"User":               user,
 		"ThemePref":          themePref,
@@ -1183,7 +1212,46 @@ func (h *WorkoutHandlers) renderDashboard(w http.ResponseWriter, r *http.Request
 		"WeightUnit":         weightUnit,
 		"DistanceUnit":       distanceUnit,
 		"FinishSummary":      finishSummary,
+		"TodayWeightKg":      todayWeightKg,
+		"HasTodayWeight":     hasTodayWeight,
 	})
+}
+
+// LogBodyWeight handles POST /body-weight
+func (h *WorkoutHandlers) LogBodyWeight(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r)
+	if user == nil {
+		http.Redirect(w, r, "/login", http.StatusFound)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		httpError(w, err, "Failed to parse form", http.StatusBadRequest)
+		return
+	}
+	raw := strings.TrimSpace(r.FormValue("weight"))
+	val, err := strconv.ParseFloat(raw, 64)
+	if err != nil || val <= 0 || val > 500 {
+		httpError(w, fmt.Errorf("invalid weight: %q", raw), "Invalid weight value", http.StatusBadRequest)
+		return
+	}
+	unitPref, err := h.authService.GetUnitPref(r.Context(), user.UserID)
+	if err != nil {
+		httpError(w, err, "Failed to load unit preference", http.StatusInternalServerError)
+		return
+	}
+	weightKg := val
+	if unitPref == auth.UnitPrefImperial {
+		weightKg = val / 2.20462
+	}
+	if err := h.progression.LogBodyWeight(r.Context(), user.UserID, weightKg); err != nil {
+		httpError(w, err, "Failed to log body weight", http.StatusInternalServerError)
+		return
+	}
+	if isHTMX(r) {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	http.Redirect(w, r, "/workouts", http.StatusSeeOther)
 }
 
 // --- helpers ---

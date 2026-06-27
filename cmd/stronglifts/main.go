@@ -79,6 +79,7 @@ func main() {
 		r.Post("/workout/standalone/{id}", workoutHandlers.UpdateStandaloneWorkout)
 		r.Post("/workout/standalone/{id}/delete", workoutHandlers.DeleteStandaloneWorkout)
 		r.Get("/progress/charts", workoutHandlers.ProgressCharts)
+		r.Post("/body-weight", workoutHandlers.LogBodyWeight)
 		r.Get("/workout/{id}", workoutHandlers.WorkoutPage)
 		r.Post("/workout/start", workoutHandlers.StartWorkout)
 		r.Post("/workout/finish-open", workoutHandlers.FinishOpenWorkouts)
