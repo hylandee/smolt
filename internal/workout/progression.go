@@ -2289,6 +2289,37 @@ func (s *ProgressionService) FinishOpenSessions(ctx context.Context, userID int)
 	return finished, nil
 }
 
+func (s *ProgressionService) DeleteOpenSessions(ctx context.Context, userID int) (int, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	if _, err = tx.ExecContext(ctx,
+		`DELETE FROM exercise_sets WHERE session_id IN (
+			SELECT id FROM workout_sessions WHERE user_id = ? AND finished_at IS NULL
+		)`, userID,
+	); err != nil {
+		return 0, fmt.Errorf("delete open session sets: %w", err)
+	}
+
+	result, err := tx.ExecContext(ctx,
+		`DELETE FROM workout_sessions WHERE user_id = ? AND finished_at IS NULL`,
+		userID,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("delete open sessions: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("commit delete open sessions: %w", err)
+	}
+
+	n, _ := result.RowsAffected()
+	return int(n), nil
+}
+
 func (s *ProgressionService) StrengthProgressSeries(ctx context.Context, userID int) (map[string][]ProgressPoint, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT es.exercise_name, DATE(ws.finished_at), MAX(es.weight)

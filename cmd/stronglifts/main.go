@@ -83,6 +83,7 @@ func main() {
 		r.Get("/workout/{id}", workoutHandlers.WorkoutPage)
 		r.Post("/workout/start", workoutHandlers.StartWorkout)
 		r.Post("/workout/finish-open", workoutHandlers.FinishOpenWorkouts)
+			r.Post("/workout/delete-open", workoutHandlers.DeleteOpenWorkouts)
 		r.Post("/workout/{id}/save", workoutHandlers.SaveTracking)
 		r.Post("/workout/{id}/exercise/add", workoutHandlers.AddExercise)
 		r.Post("/workout/{id}/exercise/{group}/set/add", workoutHandlers.AddSetToExercise)

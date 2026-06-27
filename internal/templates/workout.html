@@ -347,14 +347,16 @@
   <div class="workout-actions">
     <button class="btn btn-ghost btn-sm save-button" type="button" id="save-workout-btn">Save</button>
     <span id="autosave-status" class="card-subtitle autosave-status">Autosaved: --</span>
-    <button
-      class="btn btn-ghost btn-sm"
-      hx-delete="/workout/{{.Session.ID}}"
-      hx-confirm="Delete this workout?"
-      hx-target="body"
-      hx-push-url="/">
-      Delete
-    </button>
+    <button class="btn btn-ghost btn-sm" id="discard-workout-btn" type="button">Discard</button>
+    <script>
+      document.getElementById('discard-workout-btn').addEventListener('click', function() {
+        smoltConfirm('Discard workout', 'Delete this workout without saving progress?', 'Discard').then(function(ok) {
+          if (!ok) return;
+          fetch('/workout/{{.Session.ID}}', {method:'DELETE'})
+            .then(function() { window.location.href = '/workouts'; });
+        });
+      });
+    </script>
   </div>
 </div>
 

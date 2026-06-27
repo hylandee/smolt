@@ -921,6 +921,23 @@ func (h *WorkoutHandlers) FinishOpenWorkouts(w http.ResponseWriter, r *http.Requ
 	http.Redirect(w, r, "/workouts", http.StatusFound)
 }
 
+// DeleteOpenWorkouts deletes all in-progress (unfinished) workouts for the current user.
+func (h *WorkoutHandlers) DeleteOpenWorkouts(w http.ResponseWriter, r *http.Request) {
+	user := auth.UserFromContext(r)
+
+	if _, err := h.progression.DeleteOpenSessions(r.Context(), user.UserID); err != nil {
+		httpError(w, err, "Failed to delete open workouts", http.StatusInternalServerError)
+		return
+	}
+
+	if isHTMX(r) {
+		h.renderDashboard(w, r, user)
+		return
+	}
+
+	http.Redirect(w, r, "/workouts", http.StatusFound)
+}
+
 // DeleteExercise removes a contiguous exercise block from a session.
 func (h *WorkoutHandlers) DeleteExercise(w http.ResponseWriter, r *http.Request) {
 	user := auth.UserFromContext(r)

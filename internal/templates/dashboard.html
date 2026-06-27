@@ -184,9 +184,21 @@
   <div style="display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap;margin-bottom:.25rem;">
     <div class="card-title">Recent Workouts</div>
     {{if gt .OpenWorkoutCount 0}}
-    <form method="POST" action="/workout/finish-open" style="margin:0;">
-      <button class="btn btn-ghost btn-sm" type="submit">Complete All Open ({{.OpenWorkoutCount}})</button>
-    </form>
+    <div style="display:flex;gap:.4rem;">
+      <form method="POST" action="/workout/finish-open" style="margin:0;">
+        <button class="btn btn-ghost btn-sm" type="submit">Complete All Open ({{.OpenWorkoutCount}})</button>
+      </form>
+      <button class="btn btn-ghost btn-sm" id="discard-open-btn" type="button">Discard All Open</button>
+    </div>
+    <script>
+      document.getElementById('discard-open-btn').addEventListener('click', function() {
+        smoltConfirm('Discard open workouts', 'Delete all {{.OpenWorkoutCount}} in-progress workout(s) without saving progress?', 'Discard').then(function(ok) {
+          if (!ok) return;
+          fetch('/workout/delete-open', {method:'POST'})
+            .then(function() { window.location.reload(); });
+        });
+      });
+    </script>
     {{end}}
   </div>
   <div class="card-subtitle" style="margin-bottom:1rem;">Open any workout to resume or edit completed data.</div>
