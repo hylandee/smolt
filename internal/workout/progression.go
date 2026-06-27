@@ -2358,3 +2358,50 @@ func (s *ProgressionService) CardioProgressSeries(ctx context.Context, userID in
 	}
 	return series, nil
 }
+
+func (s *ProgressionService) LogBodyWeight(ctx context.Context, userID int, weightKg float64) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO body_weight_readings (user_id, recorded_at, weight_kg)
+		 VALUES (?, DATE('now'), ?)
+		 ON CONFLICT(user_id, recorded_at) DO UPDATE SET weight_kg = excluded.weight_kg`,
+		userID, weightKg,
+	)
+	return err
+}
+
+func (s *ProgressionService) TodayBodyWeight(ctx context.Context, userID int) (float64, bool, error) {
+	var weightKg float64
+	err := s.db.QueryRowContext(ctx,
+		`SELECT weight_kg FROM body_weight_readings WHERE user_id = ? AND recorded_at = DATE('now')`,
+		userID,
+	).Scan(&weightKg)
+	if err == sql.ErrNoRows {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	return weightKg, true, nil
+}
+
+func (s *ProgressionService) BodyWeightSeries(ctx context.Context, userID int) ([]ProgressPoint, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT recorded_at, weight_kg FROM body_weight_readings WHERE user_id = ? ORDER BY recorded_at ASC`,
+		userID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query body weight series: %w", err)
+	}
+	defer rows.Close()
+
+	var series []ProgressPoint
+	for rows.Next() {
+		var day string
+		var weightKg float64
+		if err := rows.Scan(&day, &weightKg); err != nil {
+			return nil, fmt.Errorf("scan body weight point: %w", err)
+		}
+		series = append(series, ProgressPoint{Date: day, Value: weightKg})
+	}
+	return series, rows.Err()
+}
