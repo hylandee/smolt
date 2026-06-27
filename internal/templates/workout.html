@@ -184,7 +184,30 @@
   }
   .warmup-sets { font-size:.78rem; color:var(--text-muted,#888); padding:.3rem 0 .5rem 0; display:flex; flex-wrap:wrap; gap:.35rem; align-items:center; }
   .warmup-sets .warmup-label { font-weight:600; margin-right:.1rem; }
-  .warmup-set-chip { background:var(--surface-alt,var(--surface)); border:1px solid var(--border); border-radius:4px; padding:.1rem .35rem; white-space:nowrap; }
+  .warmup-set-chip { background:var(--surface-alt,var(--surface)); border:1px solid var(--border); border-radius:4px; padding:.1rem .35rem; white-space:nowrap; cursor:pointer; font-size:inherit; color:inherit; transition:background .15s, border-color .15s; }
+  .warmup-set-chip.done { background:var(--green); border-color:var(--green); color:#000; }
+
+  /* Plate calculator */
+  .weight-tap { background:none; border:none; padding:0; color:inherit; font:inherit; cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px; }
+  .plate-popover-backdrop { position:fixed; inset:0; z-index:100; }
+  .plate-popover { position:absolute; z-index:101; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:.75rem 1rem; box-shadow:0 4px 20px rgba(0,0,0,.2); min-width:200px; }
+  .plate-stack { display:flex; align-items:center; gap:1px; height:72px; margin:.4rem 0; }
+  .plate-sleeve { width:20px; height:10px; background:#888; border-radius:0 3px 3px 0; flex-shrink:0; }
+  .plate { width:14px; border-radius:3px; flex-shrink:0; }
+  .plate[data-plate="45lb"] { background:#1565C0; height:64px; }
+  .plate[data-plate="35lb"] { background:#F9A825; height:56px; }
+  .plate[data-plate="25lb"] { background:#2E7D32; height:48px; }
+  .plate[data-plate="10lb"] { background:#E0E0E0; border:1px solid #999; height:38px; }
+  .plate[data-plate="5lb"]  { background:#C62828; height:30px; }
+  .plate[data-plate="2.5lb"]{ background:#212121; height:22px; }
+  .plate[data-plate="25kg"] { background:#C62828; height:64px; }
+  .plate[data-plate="20kg"] { background:#1565C0; height:56px; }
+  .plate[data-plate="15kg"] { background:#F9A825; height:48px; }
+  .plate[data-plate="10kg"] { background:#2E7D32; height:38px; }
+  .plate[data-plate="5kg"]  { background:#E0E0E0; border:1px solid #999; height:30px; }
+  .plate[data-plate="2.5kg"]{ background:#212121; height:22px; }
+  .plate[data-plate="2kg"],.plate[data-plate="1.5kg"],.plate[data-plate="1kg"],.plate[data-plate="0.5kg"] { background:#757575; height:16px; }
+  .plate-summary { font-size:.8rem; color:var(--text-muted,#888); margin-top:.25rem; }
   .set-row { display:grid; grid-template-columns: 58px 1fr 1fr auto; gap:.5rem; align-items:center; margin-bottom:.5rem; }
   .set-row.cardio-row { grid-template-columns: 58px 1fr auto; align-items:start; }
   .set-delete-btn {
@@ -338,7 +361,7 @@
     <div class="workout-exercise-top">
       <button class="workout-exercise-header toggle" type="button" data-exercise-toggle>
       <span class="workout-exercise-name">{{$exercise.Name}}</span>
-      <span class="workout-exercise-weight">{{printf "%.1f" $exercise.Weight}} {{$.WeightUnit}}</span>
+      <span class="workout-exercise-weight"><button type="button" class="weight-tap" onclick="showPlatePopover(this,event)" data-unit="{{$.WeightUnit}}" data-plates='[{{range $i,$p := $exercise.PlatesPerSide}}{{if $i}},{{end}}{"w":{{$p.Weight}},"n":{{$p.Count}}}{{end}}]'>{{printf "%.4g" $exercise.Weight}} {{$.WeightUnit}}</button></span>
       <span class="card-subtitle workout-exercise-status" data-exercise-status></span>
       </button>
       <div class="workout-exercise-actions">
@@ -353,7 +376,7 @@
     {{if $exercise.WarmupSets}}
     <div class="warmup-sets">
       <span class="warmup-label">Warm-up:</span>
-      {{range $exercise.WarmupSets}}<span class="warmup-set-chip">{{printf "%.4g" .Weight}}×{{.Reps}}</span>{{end}}
+      {{range $exercise.WarmupSets}}<button type="button" class="warmup-set-chip" onclick="this.classList.toggle('done')">{{printf "%.4g" .Weight}}×{{.Reps}}</button>{{end}}
     </div>
     {{end}}
     {{range $exercise.Sets}}
@@ -1726,5 +1749,60 @@
       updatePaceDisplay(row);
     });
   })();
+
+  // Plate calculator popover
+  (function() {
+    function showPlatePopover(btn, e) {
+      e.stopPropagation();
+      var pop = document.getElementById('plate-popover');
+      var backdrop = document.getElementById('plate-backdrop');
+      if (pop._source === btn && !pop.hidden) {
+        hidePlatePopover(); return;
+      }
+      pop._source = btn;
+
+      var plates = JSON.parse(btn.dataset.plates || '[]');
+      var unit = btn.dataset.unit || 'lb';
+
+      var sleeve = '<div class="plate-sleeve"></div>';
+      var platesHtml = plates.map(function(p) {
+        return Array(p.n).fill('<div class="plate" data-plate="' + p.w + unit + '" title="' + p.w + unit + '"></div>').join('');
+      }).join('');
+
+      var summary = plates.length
+        ? plates.map(function(p) { return p.n + '×' + p.w; }).join(' + ') + ' ' + unit + ' per side'
+        : 'Just the bar';
+
+      document.getElementById('plate-stack').innerHTML = sleeve + platesHtml;
+      document.getElementById('plate-summary').textContent = summary;
+
+      // Position below button, clamped to viewport
+      var rect = btn.getBoundingClientRect();
+      var top = rect.bottom + window.scrollY + 8;
+      var left = rect.left + window.scrollX - 60;
+      left = Math.max(8, Math.min(left, window.innerWidth - 224));
+      pop.style.top = top + 'px';
+      pop.style.left = left + 'px';
+
+      pop.hidden = false;
+      backdrop.hidden = false;
+    }
+
+    function hidePlatePopover() {
+      var pop = document.getElementById('plate-popover');
+      if (pop) { pop.hidden = true; pop._source = null; }
+      var bd = document.getElementById('plate-backdrop');
+      if (bd) { bd.hidden = true; }
+    }
+
+    window.showPlatePopover = showPlatePopover;
+    window.hidePlatePopover = hidePlatePopover;
+  })();
 </script>
+
+<div id="plate-backdrop" class="plate-popover-backdrop" hidden onclick="hidePlatePopover()"></div>
+<div id="plate-popover" class="plate-popover" hidden>
+  <div class="plate-stack" id="plate-stack"></div>
+  <div class="plate-summary" id="plate-summary"></div>
+</div>
 {{end}}

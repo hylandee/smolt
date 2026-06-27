@@ -1281,11 +1281,12 @@ type SessionSet struct {
 
 // SessionExercise groups sets by exercise name for UI rendering
 type SessionExercise struct {
-	Index      int
-	Name       string
-	Weight     float64
-	Sets       []SessionSet
-	WarmupSets []WarmupSet
+	Index         int
+	Name          string
+	Weight        float64
+	Sets          []SessionSet
+	WarmupSets    []WarmupSet
+	PlatesPerSide []PlateCount
 }
 
 // SessionView holds everything the workout page needs

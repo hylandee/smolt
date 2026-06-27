@@ -113,6 +113,7 @@ func (h *WorkoutHandlers) WorkoutPage(w http.ResponseWriter, r *http.Request) {
 	}
 	for i := range session.Exercises {
 		session.Exercises[i].WarmupSets = workout.WarmupSets(session.Exercises[i].Weight, weightUnit)
+		session.Exercises[i].PlatesPerSide = workout.PlatesPerSide(session.Exercises[i].Weight, weightUnit)
 	}
 	distanceUnit, err := h.distanceUnitForUser(r, user.UserID)
 	if err != nil {
