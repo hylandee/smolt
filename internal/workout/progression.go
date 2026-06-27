@@ -452,6 +452,18 @@ func (s *ProgressionService) GetStandaloneWorkout(ctx context.Context, userID in
 		return nil, fmt.Errorf("load standalone workout: %w", err)
 	}
 
+	// Collect items into memory first so we can close rows before querying set schemes.
+	// Nested QueryContext while rows is open would deadlock with MaxOpenConns(1).
+	type rawItem struct {
+		id            int64
+		detail        StandaloneWorkoutItemDetail
+		sets          sql.NullInt64
+		targetReps    sql.NullInt64
+		weight        sql.NullFloat64
+		timeMinutes   sql.NullInt64
+		distanceMiles sql.NullFloat64
+	}
+
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, exercise_name, exercise_type, sets, target_reps, weight, time_minutes, distance_miles
 		 FROM standalone_workout_items
@@ -462,27 +474,31 @@ func (s *ProgressionService) GetStandaloneWorkout(ctx context.Context, userID in
 	if err != nil {
 		return nil, fmt.Errorf("load standalone workout items: %w", err)
 	}
-	defer rows.Close()
 
+	var rawItems []rawItem
 	for rows.Next() {
-		var itemID int64
-		var item StandaloneWorkoutItemDetail
-		var sets sql.NullInt64
-		var targetReps sql.NullInt64
-		var weight sql.NullFloat64
-		var timeMinutes sql.NullInt64
-		var distanceMiles sql.NullFloat64
-		if err := rows.Scan(&itemID, &item.ExerciseName, &item.ExerciseType, &sets, &targetReps, &weight, &timeMinutes, &distanceMiles); err != nil {
+		var ri rawItem
+		if err := rows.Scan(&ri.id, &ri.detail.ExerciseName, &ri.detail.ExerciseType, &ri.sets, &ri.targetReps, &ri.weight, &ri.timeMinutes, &ri.distanceMiles); err != nil {
+			rows.Close()
 			return nil, fmt.Errorf("scan standalone workout item: %w", err)
 		}
+		rawItems = append(rawItems, ri)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, fmt.Errorf("iterate standalone workout items: %w", err)
+	}
+	rows.Close()
 
+	for _, ri := range rawItems {
+		item := ri.detail
 		if item.ExerciseType == StandaloneTypeStrength {
 			setRows, err := s.db.QueryContext(ctx,
 				`SELECT position, target_reps, weight
 				 FROM standalone_workout_item_sets
 				 WHERE workout_item_id = ?
 				 ORDER BY position`,
-				itemID,
+				ri.id,
 			)
 			if err != nil {
 				return nil, fmt.Errorf("load standalone workout item set scheme: %w", err)
@@ -503,16 +519,16 @@ func (s *ProgressionService) GetStandaloneWorkout(ctx context.Context, userID in
 
 			if len(item.SetScheme) == 0 {
 				count := 5
-				if sets.Valid && sets.Int64 > 0 {
-					count = int(sets.Int64)
+				if ri.sets.Valid && ri.sets.Int64 > 0 {
+					count = int(ri.sets.Int64)
 				}
 				reps := TargetReps
-				if targetReps.Valid && targetReps.Int64 > 0 {
-					reps = int(targetReps.Int64)
+				if ri.targetReps.Valid && ri.targetReps.Int64 > 0 {
+					reps = int(ri.targetReps.Int64)
 				}
 				setWeight := 0.0
-				if weight.Valid && weight.Float64 >= 0 {
-					setWeight = weight.Float64
+				if ri.weight.Valid && ri.weight.Float64 >= 0 {
+					setWeight = ri.weight.Float64
 				}
 				for idx := 0; idx < count; idx++ {
 					item.SetScheme = append(item.SetScheme, StandaloneStrengthSetInput{
@@ -523,18 +539,15 @@ func (s *ProgressionService) GetStandaloneWorkout(ctx context.Context, userID in
 				}
 			}
 		} else {
-			if timeMinutes.Valid {
-				item.TimeMinutes = int(timeMinutes.Int64)
+			if ri.timeMinutes.Valid {
+				item.TimeMinutes = int(ri.timeMinutes.Int64)
 			}
-			if distanceMiles.Valid {
-				item.DistanceMiles = distanceMiles.Float64
+			if ri.distanceMiles.Valid {
+				item.DistanceMiles = ri.distanceMiles.Float64
 			}
 		}
 
 		detail.Items = append(detail.Items, item)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate standalone workout items: %w", err)
 	}
 
 	return &detail, nil
@@ -1790,6 +1803,11 @@ func (s *ProgressionService) ExportBackup(ctx context.Context, userID int) (*Bac
 	}
 	liftRows.Close()
 
+	// Collect sessions into memory before querying their sets (avoids nested open rows with MaxOpenConns(1)).
+	type rawSession struct {
+		id  int64
+		row BackupSession
+	}
 	sessionRows, err := s.db.QueryContext(ctx,
 		`SELECT id, workout_name, created_at, finished_at, COALESCE(notes, '')
 		 FROM workout_sessions
@@ -1800,47 +1818,19 @@ func (s *ProgressionService) ExportBackup(ctx context.Context, userID int) (*Bac
 	if err != nil {
 		return nil, fmt.Errorf("query sessions for backup: %w", err)
 	}
+	var rawSessions []rawSession
 	for sessionRows.Next() {
-		var sessionID int64
-		var row BackupSession
+		var rs rawSession
 		var finishedAt sql.NullTime
-		if err := sessionRows.Scan(&sessionID, &row.WorkoutName, &row.CreatedAt, &finishedAt, &row.Notes); err != nil {
+		if err := sessionRows.Scan(&rs.id, &rs.row.WorkoutName, &rs.row.CreatedAt, &finishedAt, &rs.row.Notes); err != nil {
 			sessionRows.Close()
 			return nil, fmt.Errorf("scan session backup row: %w", err)
 		}
 		if finishedAt.Valid {
 			v := finishedAt.Time
-			row.FinishedAt = &v
+			rs.row.FinishedAt = &v
 		}
-
-		setRows, err := s.db.QueryContext(ctx,
-			`SELECT exercise_name, set_number, target_reps, COALESCE(actual_reps, 0), weight, COALESCE(completed, 0)
-			 FROM exercise_sets
-			 WHERE session_id = ?
-			 ORDER BY set_number`,
-			sessionID,
-		)
-		if err != nil {
-			sessionRows.Close()
-			return nil, fmt.Errorf("query backup session sets: %w", err)
-		}
-		for setRows.Next() {
-			var setRow BackupSessionSet
-			if err := setRows.Scan(&setRow.ExerciseName, &setRow.SetNumber, &setRow.TargetReps, &setRow.ActualReps, &setRow.Weight, &setRow.Completed); err != nil {
-				setRows.Close()
-				sessionRows.Close()
-				return nil, fmt.Errorf("scan backup session set row: %w", err)
-			}
-			row.Sets = append(row.Sets, setRow)
-		}
-		if err := setRows.Err(); err != nil {
-			setRows.Close()
-			sessionRows.Close()
-			return nil, fmt.Errorf("iterate backup session sets: %w", err)
-		}
-		setRows.Close()
-
-		backup.Sessions = append(backup.Sessions, row)
+		rawSessions = append(rawSessions, rs)
 	}
 	if err := sessionRows.Err(); err != nil {
 		sessionRows.Close()
@@ -1848,6 +1838,39 @@ func (s *ProgressionService) ExportBackup(ctx context.Context, userID int) (*Bac
 	}
 	sessionRows.Close()
 
+	for _, rs := range rawSessions {
+		row := rs.row
+		setRows, err := s.db.QueryContext(ctx,
+			`SELECT exercise_name, set_number, target_reps, COALESCE(actual_reps, 0), weight, COALESCE(completed, 0)
+			 FROM exercise_sets
+			 WHERE session_id = ?
+			 ORDER BY set_number`,
+			rs.id,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("query backup session sets: %w", err)
+		}
+		for setRows.Next() {
+			var setRow BackupSessionSet
+			if err := setRows.Scan(&setRow.ExerciseName, &setRow.SetNumber, &setRow.TargetReps, &setRow.ActualReps, &setRow.Weight, &setRow.Completed); err != nil {
+				setRows.Close()
+				return nil, fmt.Errorf("scan backup session set row: %w", err)
+			}
+			row.Sets = append(row.Sets, setRow)
+		}
+		if err := setRows.Err(); err != nil {
+			setRows.Close()
+			return nil, fmt.Errorf("iterate backup session sets: %w", err)
+		}
+		setRows.Close()
+		backup.Sessions = append(backup.Sessions, row)
+	}
+
+	// Collect standalone workouts into memory before querying their items.
+	type rawWorkout struct {
+		id      int64
+		workout BackupStandaloneWorkout
+	}
 	workoutRows, err := s.db.QueryContext(ctx,
 		`SELECT id, COALESCE(title, ''), COALESCE(notes, ''), created_at
 		 FROM standalone_workouts
@@ -1858,14 +1881,29 @@ func (s *ProgressionService) ExportBackup(ctx context.Context, userID int) (*Bac
 	if err != nil {
 		return nil, fmt.Errorf("query standalone workouts for backup: %w", err)
 	}
+	var rawWorkouts []rawWorkout
 	for workoutRows.Next() {
-		var workoutID int64
-		var workout BackupStandaloneWorkout
-		if err := workoutRows.Scan(&workoutID, &workout.Title, &workout.Notes, &workout.CreatedAt); err != nil {
+		var rw rawWorkout
+		if err := workoutRows.Scan(&rw.id, &rw.workout.Title, &rw.workout.Notes, &rw.workout.CreatedAt); err != nil {
 			workoutRows.Close()
 			return nil, fmt.Errorf("scan standalone workout backup row: %w", err)
 		}
+		rawWorkouts = append(rawWorkouts, rw)
+	}
+	if err := workoutRows.Err(); err != nil {
+		workoutRows.Close()
+		return nil, fmt.Errorf("iterate standalone workouts for backup: %w", err)
+	}
+	workoutRows.Close()
 
+	for _, rw := range rawWorkouts {
+		workout := rw.workout
+
+		// Collect items before querying their schemes.
+		type rawItem struct {
+			id   int64
+			item BackupStandaloneItem
+		}
 		itemRows, err := s.db.QueryContext(ctx,
 			`SELECT id, position, exercise_name, exercise_type,
 			        COALESCE(sets, 0), COALESCE(target_reps, 0), COALESCE(weight, 0),
@@ -1873,67 +1911,56 @@ func (s *ProgressionService) ExportBackup(ctx context.Context, userID int) (*Bac
 			 FROM standalone_workout_items
 			 WHERE workout_id = ?
 			 ORDER BY position`,
-			workoutID,
+			rw.id,
 		)
 		if err != nil {
-			workoutRows.Close()
 			return nil, fmt.Errorf("query standalone workout items for backup: %w", err)
 		}
+		var rawItems []rawItem
 		for itemRows.Next() {
-			var itemID int64
-			var item BackupStandaloneItem
-			if err := itemRows.Scan(&itemID, &item.Position, &item.ExerciseName, &item.ExerciseType, &item.Sets, &item.TargetReps, &item.Weight, &item.TimeMinutes, &item.DistanceMiles); err != nil {
+			var ri rawItem
+			if err := itemRows.Scan(&ri.id, &ri.item.Position, &ri.item.ExerciseName, &ri.item.ExerciseType, &ri.item.Sets, &ri.item.TargetReps, &ri.item.Weight, &ri.item.TimeMinutes, &ri.item.DistanceMiles); err != nil {
 				itemRows.Close()
-				workoutRows.Close()
 				return nil, fmt.Errorf("scan standalone workout item for backup: %w", err)
 			}
+			rawItems = append(rawItems, ri)
+		}
+		if err := itemRows.Err(); err != nil {
+			itemRows.Close()
+			return nil, fmt.Errorf("iterate standalone workout items for backup: %w", err)
+		}
+		itemRows.Close()
 
+		for _, ri := range rawItems {
+			item := ri.item
 			schemeRows, err := s.db.QueryContext(ctx,
 				`SELECT position, target_reps, weight
 				 FROM standalone_workout_item_sets
 				 WHERE workout_item_id = ?
 				 ORDER BY position`,
-				itemID,
+				ri.id,
 			)
 			if err != nil {
-				itemRows.Close()
-				workoutRows.Close()
 				return nil, fmt.Errorf("query standalone workout item scheme for backup: %w", err)
 			}
 			for schemeRows.Next() {
 				var scheme StandaloneStrengthSetInput
 				if err := schemeRows.Scan(&scheme.Position, &scheme.TargetReps, &scheme.Weight); err != nil {
 					schemeRows.Close()
-					itemRows.Close()
-					workoutRows.Close()
 					return nil, fmt.Errorf("scan standalone workout item scheme for backup: %w", err)
 				}
 				item.SetScheme = append(item.SetScheme, scheme)
 			}
 			if err := schemeRows.Err(); err != nil {
 				schemeRows.Close()
-				itemRows.Close()
-				workoutRows.Close()
 				return nil, fmt.Errorf("iterate standalone workout item schemes for backup: %w", err)
 			}
 			schemeRows.Close()
-
 			workout.Items = append(workout.Items, item)
 		}
-		if err := itemRows.Err(); err != nil {
-			itemRows.Close()
-			workoutRows.Close()
-			return nil, fmt.Errorf("iterate standalone workout items for backup: %w", err)
-		}
-		itemRows.Close()
 
 		backup.StandaloneWorkouts = append(backup.StandaloneWorkouts, workout)
 	}
-	if err := workoutRows.Err(); err != nil {
-		workoutRows.Close()
-		return nil, fmt.Errorf("iterate standalone workouts for backup: %w", err)
-	}
-	workoutRows.Close()
 
 	return backup, nil
 }

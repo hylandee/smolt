@@ -16,6 +16,14 @@ func PlatesPerSide(totalWeight float64, unit string) []PlateCount {
 		barWeight = 20.0
 	}
 
+	maxWeight := 500.0
+	if unit == "kg" {
+		maxWeight = 220.0
+	}
+	if totalWeight > maxWeight {
+		return nil
+	}
+
 	perSide := (totalWeight - barWeight) / 2
 	if perSide <= 0 {
 		return nil

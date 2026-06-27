@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -35,11 +35,25 @@ func newTestClient(server *httptest.Server) *http.Client {
 	}
 }
 
+func newTestDB(t *testing.T) *db.DB {
+	t.Helper()
+	dir := t.TempDir()
+	testDB, err := db.New(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatalf("db.New: %v", err)
+	}
+	if err := testDB.Migrate("../../migrations"); err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
+	t.Cleanup(func() { testDB.Close() })
+	return testDB
+}
+
 func newServerWithDB(t *testing.T, testDB *db.DB) *httptest.Server {
 	t.Helper()
 
-	sessionStore := auth.NewSessionStore(testDB.Conn())
-	authHandlers := handlers.NewAuthHandlers(testDB, sessionStore)
+	sessionStore := auth.NewSessionStore(testDB)
+	authHandlers := handlers.NewAuthHandlers(testDB, sessionStore, false)
 
 	r := chi.NewRouter()
 	r.Get("/register", authHandlers.Register)
@@ -62,32 +76,10 @@ func newServerWithDB(t *testing.T, testDB *db.DB) *httptest.Server {
 
 func newTestApp(t *testing.T) (*http.Client, func()) {
 	t.Helper()
-
-	tmpFile, err := os.CreateTemp("", "test_*.db")
-	if err != nil {
-		t.Fatalf("Failed to create temp db: %v", err)
-	}
-	tmpFile.Close()
-
-	testDB, err := db.New(tmpFile.Name())
-	if err != nil {
-		t.Fatalf("Failed to create database: %v", err)
-	}
-
-	if err := testDB.CreateSchema(); err != nil {
-		t.Fatalf("Failed to create schema: %v", err)
-	}
-
+	testDB := newTestDB(t)
 	server := newServerWithDB(t, testDB)
 	client := newTestClient(server)
-
-	cleanup := func() {
-		server.Close()
-		testDB.Close()
-		os.Remove(tmpFile.Name())
-	}
-
-	return client, cleanup
+	return client, server.Close
 }
 
 func completeOnboarding(t *testing.T, client *http.Client, cookie string) {
@@ -473,7 +465,6 @@ func TestAuthenticatedUserCanAccessDashboard(t *testing.T) {
 	client, cleanup := newTestApp(t)
 	defer cleanup()
 
-	// Register and login
 	resp, _ := client.PostForm("http://app/register", url.Values{
 		"username": {"alice"},
 		"password": {"password123"},
@@ -490,10 +481,8 @@ func TestAuthenticatedUserCanAccessDashboard(t *testing.T) {
 	parts := strings.SplitN(cookie, ";", 2)
 	completeOnboarding(t, client, parts[0])
 
-	// Access dashboard with cookie
 	req, _ := http.NewRequest("GET", "http://app/", nil)
 	if cookie != "" {
-		// Extract just the cookie value
 		req.Header.Set("Cookie", parts[0])
 	}
 	resp, err := client.Do(req)
@@ -513,7 +502,6 @@ func TestLogout(t *testing.T) {
 	client, cleanup := newTestApp(t)
 	defer cleanup()
 
-	// Register and login
 	resp, _ := client.PostForm("http://app/register", url.Values{
 		"username": {"alice"},
 		"password": {"password123"},
@@ -527,7 +515,6 @@ func TestLogout(t *testing.T) {
 	})
 	resp.Body.Close()
 
-	// Logout
 	resp, err := client.Post("http://app/logout", "", nil)
 	if err != nil {
 		t.Fatalf("POST /logout: %v", err)
@@ -1022,22 +1009,7 @@ func TestDeleteAccountRequiresAuthentication(t *testing.T) {
 }
 
 func TestSessionPersistsAcrossServerRestart(t *testing.T) {
-	tmpFile, err := os.CreateTemp("", "session_restart_*.db")
-	if err != nil {
-		t.Fatalf("create temp db: %v", err)
-	}
-	tmpFile.Close()
-	defer os.Remove(tmpFile.Name())
-
-	testDB, err := db.New(tmpFile.Name())
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	defer testDB.Close()
-
-	if err := testDB.CreateSchema(); err != nil {
-		t.Fatalf("create schema: %v", err)
-	}
+	testDB := newTestDB(t)
 
 	server := newServerWithDB(t, testDB)
 	client := newTestClient(server)
@@ -1065,7 +1037,7 @@ func TestSessionPersistsAcrossServerRestart(t *testing.T) {
 
 	req, _ := http.NewRequest("GET", "http://app/", nil)
 	req.Header.Set("Cookie", parts[0])
-	resp, err = client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatalf("GET / after restart: %v", err)
 	}
@@ -1076,5 +1048,123 @@ func TestSessionPersistsAcrossServerRestart(t *testing.T) {
 	resp.Body.Close()
 	if !strings.Contains(string(body), "Next Workout") {
 		t.Fatalf("expected dashboard after restart, body: %s", body)
+	}
+}
+
+// --- New tests for Batch 5 ---
+
+func TestPasswordMinLength(t *testing.T) {
+	client, cleanup := newTestApp(t)
+	defer cleanup()
+
+	resp, _ := client.PostForm("http://app/register", url.Values{
+		"username": {"alice"},
+		"password": {"1234567"}, // 7 chars — too short
+		"confirm":  {"1234567"},
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 (form re-render), got %d", resp.StatusCode)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if !strings.Contains(string(body), "at least 8 characters") {
+		t.Errorf("expected min-length error, body: %s", body)
+	}
+}
+
+func TestPasswordMinLengthAccepted(t *testing.T) {
+	client, cleanup := newTestApp(t)
+	defer cleanup()
+
+	resp, _ := client.PostForm("http://app/register", url.Values{
+		"username": {"alice"},
+		"password": {"12345678"}, // exactly 8 chars — should pass
+		"confirm":  {"12345678"},
+	})
+	if resp.StatusCode != http.StatusFound {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Errorf("expected 302, got %d body: %s", resp.StatusCode, body)
+	}
+	resp.Body.Close()
+}
+
+func TestPasswordMaxLength(t *testing.T) {
+	client, cleanup := newTestApp(t)
+	defer cleanup()
+
+	long73 := strings.Repeat("a", 73)
+	resp, _ := client.PostForm("http://app/register", url.Values{
+		"username": {"alice"},
+		"password": {long73},
+		"confirm":  {long73},
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 (form re-render), got %d", resp.StatusCode)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if !strings.Contains(string(body), "72 characters") {
+		t.Errorf("expected max-length error, body: %s", body)
+	}
+}
+
+func TestPasswordMaxLengthAccepted(t *testing.T) {
+	client, cleanup := newTestApp(t)
+	defer cleanup()
+
+	long72 := strings.Repeat("a", 72)
+	resp, _ := client.PostForm("http://app/register", url.Values{
+		"username": {"alice"},
+		"password": {long72},
+		"confirm":  {long72},
+	})
+	if resp.StatusCode != http.StatusFound {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Errorf("expected 302, got %d body: %s", resp.StatusCode, body)
+	}
+	resp.Body.Close()
+}
+
+func TestLoginCookieAttributes(t *testing.T) {
+	client, cleanup := newTestApp(t)
+	defer cleanup()
+
+	resp, _ := client.PostForm("http://app/register", url.Values{
+		"username": {"alice"},
+		"password": {"password123"},
+		"confirm":  {"password123"},
+	})
+	resp.Body.Close()
+
+	resp, err := client.PostForm("http://app/login", url.Values{
+		"username": {"alice"},
+		"password": {"password123"},
+	})
+	if err != nil {
+		t.Fatalf("POST /login: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("expected 302, got %d", resp.StatusCode)
+	}
+
+	cookieHeader := resp.Header.Get("Set-Cookie")
+	if cookieHeader == "" {
+		t.Fatal("expected Set-Cookie header")
+	}
+
+	lower := strings.ToLower(cookieHeader)
+	if !strings.Contains(lower, "httponly") {
+		t.Errorf("cookie missing HttpOnly: %s", cookieHeader)
+	}
+	if !strings.Contains(lower, "samesite=lax") {
+		t.Errorf("cookie missing SameSite=Lax: %s", cookieHeader)
+	}
+	// secureCookies=false in tests — Secure must NOT be present
+	if strings.Contains(lower, "secure") {
+		t.Errorf("cookie should not have Secure flag in test (secureCookies=false): %s", cookieHeader)
 	}
 }

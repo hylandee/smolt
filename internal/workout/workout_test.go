@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -46,19 +46,18 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 func newApp(t *testing.T) *testApp {
 	t.Helper()
-	f, _ := os.CreateTemp("", "test_*.db")
-	f.Close()
+	dir := t.TempDir()
 
-	testDB, err := db.New(f.Name())
+	testDB, err := db.New(filepath.Join(dir, "test.db"))
 	if err != nil {
 		t.Fatalf("db.New: %v", err)
 	}
-	if err := testDB.CreateSchema(); err != nil {
-		t.Fatalf("CreateSchema: %v", err)
+	if err := testDB.Migrate("../../migrations"); err != nil {
+		t.Fatalf("Migrate: %v", err)
 	}
 
-	sessionStore := auth.NewSessionStore(testDB.Conn())
-	authH := handlers.NewAuthHandlers(testDB, sessionStore)
+	sessionStore := auth.NewSessionStore(testDB)
+	authH := handlers.NewAuthHandlers(testDB, sessionStore, false)
 	workoutH := handlers.NewWorkoutHandlers(testDB)
 
 	r := chi.NewRouter()
@@ -112,7 +111,6 @@ func newApp(t *testing.T) *testApp {
 		cleanup: func() {
 			server.Close()
 			testDB.Close()
-			os.Remove(f.Name())
 		},
 	}
 }
@@ -231,7 +229,7 @@ func (a *testApp) delete(t *testing.T, path, cookie string) *http.Response {
 func (a *testApp) sessionSetCount(t *testing.T, sessionID int) int {
 	t.Helper()
 	var total int
-	err := a.db.Conn().QueryRow(`SELECT COUNT(1) FROM exercise_sets WHERE session_id = ?`, sessionID).Scan(&total)
+	err := a.db.QueryRow(`SELECT COUNT(1) FROM exercise_sets WHERE session_id = ?`, sessionID).Scan(&total)
 	if err != nil {
 		t.Fatalf("count session sets: %v", err)
 	}
@@ -309,7 +307,7 @@ func TestStartWorkoutProgramSelection(t *testing.T) {
 	sessionID := int64(result["sessionId"].(float64))
 
 	var workoutName string
-	err := app.db.Conn().QueryRow(`SELECT workout_name FROM workout_sessions WHERE id = ?`, sessionID).Scan(&workoutName)
+	err := app.db.QueryRow(`SELECT workout_name FROM workout_sessions WHERE id = ?`, sessionID).Scan(&workoutName)
 	if err != nil {
 		t.Fatalf("query workout_name: %v", err)
 	}
@@ -318,13 +316,13 @@ func TestStartWorkoutProgramSelection(t *testing.T) {
 	}
 
 	var squatSets, ohpSets, deadliftSets int
-	if err := app.db.Conn().QueryRow(`SELECT COUNT(1) FROM exercise_sets WHERE session_id = ? AND exercise_name = ?`, sessionID, "Squat").Scan(&squatSets); err != nil {
+	if err := app.db.QueryRow(`SELECT COUNT(1) FROM exercise_sets WHERE session_id = ? AND exercise_name = ?`, sessionID, "Squat").Scan(&squatSets); err != nil {
 		t.Fatalf("count squat sets: %v", err)
 	}
-	if err := app.db.Conn().QueryRow(`SELECT COUNT(1) FROM exercise_sets WHERE session_id = ? AND exercise_name = ?`, sessionID, "OHP").Scan(&ohpSets); err != nil {
+	if err := app.db.QueryRow(`SELECT COUNT(1) FROM exercise_sets WHERE session_id = ? AND exercise_name = ?`, sessionID, "OHP").Scan(&ohpSets); err != nil {
 		t.Fatalf("count OHP sets: %v", err)
 	}
-	if err := app.db.Conn().QueryRow(`SELECT COUNT(1) FROM exercise_sets WHERE session_id = ? AND exercise_name = ?`, sessionID, "Deadlift").Scan(&deadliftSets); err != nil {
+	if err := app.db.QueryRow(`SELECT COUNT(1) FROM exercise_sets WHERE session_id = ? AND exercise_name = ?`, sessionID, "Deadlift").Scan(&deadliftSets); err != nil {
 		t.Fatalf("count deadlift sets: %v", err)
 	}
 
@@ -403,12 +401,12 @@ func TestCreateStandaloneWorkoutSavesCardioDefaults(t *testing.T) {
 	resp.Body.Close()
 
 	var workoutID int64
-	err = app.db.Conn().QueryRow(`SELECT id FROM standalone_workouts ORDER BY id DESC LIMIT 1`).Scan(&workoutID)
+	err = app.db.QueryRow(`SELECT id FROM standalone_workouts ORDER BY id DESC LIMIT 1`).Scan(&workoutID)
 	if err != nil {
 		t.Fatalf("query standalone_workouts: %v", err)
 	}
 
-	rows, err := app.db.Conn().Query(`SELECT exercise_type, time_minutes, distance_miles FROM standalone_workout_items WHERE workout_id = ? ORDER BY position`, workoutID)
+	rows, err := app.db.Query(`SELECT exercise_type, time_minutes, distance_miles FROM standalone_workout_items WHERE workout_id = ? ORDER BY position`, workoutID)
 	if err != nil {
 		t.Fatalf("query standalone_workout_items: %v", err)
 	}
@@ -468,7 +466,7 @@ func TestStartWorkoutFromStandaloneSelection(t *testing.T) {
 	resp.Body.Close()
 
 	var standaloneID int64
-	err = app.db.Conn().QueryRow(`SELECT id FROM standalone_workouts ORDER BY id DESC LIMIT 1`).Scan(&standaloneID)
+	err = app.db.QueryRow(`SELECT id FROM standalone_workouts ORDER BY id DESC LIMIT 1`).Scan(&standaloneID)
 	if err != nil {
 		t.Fatalf("query standalone id: %v", err)
 	}
@@ -486,7 +484,7 @@ func TestStartWorkoutFromStandaloneSelection(t *testing.T) {
 	sessionID := int64(result["sessionId"].(float64))
 
 	var setCount int
-	err = app.db.Conn().QueryRow(`SELECT COUNT(1) FROM exercise_sets WHERE session_id = ?`, sessionID).Scan(&setCount)
+	err = app.db.QueryRow(`SELECT COUNT(1) FROM exercise_sets WHERE session_id = ?`, sessionID).Scan(&setCount)
 	if err != nil {
 		t.Fatalf("count sets for custom session: %v", err)
 	}
@@ -527,12 +525,12 @@ func TestStartWorkoutFromStandaloneStrengthScheme(t *testing.T) {
 	resp.Body.Close()
 
 	var workoutID int64
-	err = app.db.Conn().QueryRow(`SELECT id FROM standalone_workouts ORDER BY id DESC LIMIT 1`).Scan(&workoutID)
+	err = app.db.QueryRow(`SELECT id FROM standalone_workouts ORDER BY id DESC LIMIT 1`).Scan(&workoutID)
 	if err != nil {
 		t.Fatalf("query standalone workout id: %v", err)
 	}
 
-	rows, err := app.db.Conn().Query(`
+	rows, err := app.db.Query(`
 		SELECT s.position, s.target_reps, s.weight
 		FROM standalone_workout_item_sets s
 		JOIN standalone_workout_items i ON i.id = s.workout_item_id
@@ -575,7 +573,7 @@ func TestStartWorkoutFromStandaloneStrengthScheme(t *testing.T) {
 	decodeJSON(t, resp, &result)
 	sessionID := int64(result["sessionId"].(float64))
 
-	setRows, err := app.db.Conn().Query(`SELECT set_number, target_reps, weight FROM exercise_sets WHERE session_id = ? ORDER BY set_number`, sessionID)
+	setRows, err := app.db.Query(`SELECT set_number, target_reps, weight FROM exercise_sets WHERE session_id = ? ORDER BY set_number`, sessionID)
 	if err != nil {
 		t.Fatalf("query exercise_sets for session: %v", err)
 	}
@@ -627,7 +625,7 @@ func TestEditStandaloneWorkoutPageAndUpdate(t *testing.T) {
 	resp.Body.Close()
 
 	var workoutID int64
-	err := app.db.Conn().QueryRow(`SELECT id FROM standalone_workouts ORDER BY id DESC LIMIT 1`).Scan(&workoutID)
+	err := app.db.QueryRow(`SELECT id FROM standalone_workouts ORDER BY id DESC LIMIT 1`).Scan(&workoutID)
 	if err != nil {
 		t.Fatalf("query standalone workout id: %v", err)
 	}
@@ -663,7 +661,7 @@ func TestEditStandaloneWorkoutPageAndUpdate(t *testing.T) {
 	resp.Body.Close()
 
 	var title, notes string
-	err = app.db.Conn().QueryRow(`SELECT title, notes FROM standalone_workouts WHERE id = ?`, workoutID).Scan(&title, &notes)
+	err = app.db.QueryRow(`SELECT title, notes FROM standalone_workouts WHERE id = ?`, workoutID).Scan(&title, &notes)
 	if err != nil {
 		t.Fatalf("query updated standalone workout: %v", err)
 	}
@@ -672,7 +670,7 @@ func TestEditStandaloneWorkoutPageAndUpdate(t *testing.T) {
 	}
 
 	var itemCount int
-	err = app.db.Conn().QueryRow(`SELECT COUNT(1) FROM standalone_workout_items WHERE workout_id = ?`, workoutID).Scan(&itemCount)
+	err = app.db.QueryRow(`SELECT COUNT(1) FROM standalone_workout_items WHERE workout_id = ?`, workoutID).Scan(&itemCount)
 	if err != nil {
 		t.Fatalf("count updated standalone items: %v", err)
 	}
@@ -681,7 +679,7 @@ func TestEditStandaloneWorkoutPageAndUpdate(t *testing.T) {
 	}
 
 	var schemeCount int
-	err = app.db.Conn().QueryRow(`
+	err = app.db.QueryRow(`
 		SELECT COUNT(1)
 		FROM standalone_workout_item_sets s
 		JOIN standalone_workout_items i ON i.id = s.workout_item_id
@@ -720,7 +718,7 @@ func TestDeleteStandaloneWorkout(t *testing.T) {
 	}
 
 	var workoutID int64
-	err := app.db.Conn().QueryRow(`SELECT id FROM standalone_workouts ORDER BY id ASC LIMIT 1`).Scan(&workoutID)
+	err := app.db.QueryRow(`SELECT id FROM standalone_workouts ORDER BY id ASC LIMIT 1`).Scan(&workoutID)
 	if err != nil {
 		t.Fatalf("query standalone workout id: %v", err)
 	}
@@ -733,7 +731,7 @@ func TestDeleteStandaloneWorkout(t *testing.T) {
 	resp.Body.Close()
 
 	var count int
-	err = app.db.Conn().QueryRow(`SELECT COUNT(1) FROM standalone_workouts`).Scan(&count)
+	err = app.db.QueryRow(`SELECT COUNT(1) FROM standalone_workouts`).Scan(&count)
 	if err != nil {
 		t.Fatalf("count standalone workouts after delete: %v", err)
 	}
@@ -748,7 +746,7 @@ func TestDeleteStandaloneWorkout(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	err = app.db.Conn().QueryRow(`SELECT COUNT(1) FROM standalone_workouts`).Scan(&count)
+	err = app.db.QueryRow(`SELECT COUNT(1) FROM standalone_workouts`).Scan(&count)
 	if err != nil {
 		t.Fatalf("count standalone workouts after bulk delete: %v", err)
 	}
@@ -924,8 +922,8 @@ func TestFinishWorkoutBDeadliftIncrementImperial(t *testing.T) {
 			continue
 		}
 		delta := update["NewWeight"].(float64) - update["OldWeight"].(float64)
-		if delta != 5.0 {
-			t.Fatalf("expected deadlift increment of 5.0 lb, got %.2f", delta)
+		if delta != 10.0 {
+			t.Fatalf("expected deadlift increment of 10.0 lb (5kg x2), got %.2f", delta)
 		}
 		return
 	}
@@ -943,7 +941,7 @@ func TestFinishWorkoutUsesManualWeightEditsForProgression(t *testing.T) {
 	decodeJSON(t, resp, &session)
 	sessionID := int(session["sessionId"].(float64))
 
-	rows, err := app.db.Conn().Query(`SELECT set_number, exercise_name FROM exercise_sets WHERE session_id = ? ORDER BY set_number`, sessionID)
+	rows, err := app.db.Query(`SELECT set_number, exercise_name FROM exercise_sets WHERE session_id = ? ORDER BY set_number`, sessionID)
 	if err != nil {
 		t.Fatalf("query sets: %v", err)
 	}
@@ -996,7 +994,7 @@ func TestFinishWorkoutUsesManualWeightEditsForProgression(t *testing.T) {
 	resp.Body.Close()
 
 	var benchWeight float64
-	err = app.db.Conn().QueryRow(`SELECT current_weight FROM lift_progress WHERE exercise_name = 'Bench Press'`).Scan(&benchWeight)
+	err = app.db.QueryRow(`SELECT current_weight FROM lift_progress WHERE exercise_name = 'Bench Press'`).Scan(&benchWeight)
 	if err != nil {
 		t.Fatalf("query bench progress: %v", err)
 	}
@@ -1005,7 +1003,7 @@ func TestFinishWorkoutUsesManualWeightEditsForProgression(t *testing.T) {
 	}
 
 	var rowWeight float64
-	err = app.db.Conn().QueryRow(`SELECT current_weight FROM lift_progress WHERE exercise_name = 'Barbell Row'`).Scan(&rowWeight)
+	err = app.db.QueryRow(`SELECT current_weight FROM lift_progress WHERE exercise_name = 'Barbell Row'`).Scan(&rowWeight)
 	if err != nil {
 		t.Fatalf("query row progress: %v", err)
 	}
@@ -1282,7 +1280,7 @@ func TestAddSetToExerciseGroupAppendsSet(t *testing.T) {
 	resp.Body.Close()
 
 	var totalSets int
-	if err := app.db.Conn().QueryRow(`SELECT COUNT(1) FROM exercise_sets WHERE session_id = ?`, sessionID).Scan(&totalSets); err != nil {
+	if err := app.db.QueryRow(`SELECT COUNT(1) FROM exercise_sets WHERE session_id = ?`, sessionID).Scan(&totalSets); err != nil {
 		t.Fatalf("count sets after add set: %v", err)
 	}
 	if totalSets != 16 {
@@ -1290,7 +1288,7 @@ func TestAddSetToExerciseGroupAppendsSet(t *testing.T) {
 	}
 
 	var squatSets int
-	if err := app.db.Conn().QueryRow(`SELECT COUNT(1) FROM exercise_sets WHERE session_id = ? AND exercise_name = ?`, sessionID, "Squat").Scan(&squatSets); err != nil {
+	if err := app.db.QueryRow(`SELECT COUNT(1) FROM exercise_sets WHERE session_id = ? AND exercise_name = ?`, sessionID, "Squat").Scan(&squatSets); err != nil {
 		t.Fatalf("count squat sets after add set: %v", err)
 	}
 	if squatSets != 6 {
@@ -1319,7 +1317,7 @@ func TestReorderExerciseBlocksUpdatesSetOrder(t *testing.T) {
 	resp.Body.Close()
 
 	var firstExercise string
-	err := app.db.Conn().QueryRow(`SELECT exercise_name FROM exercise_sets WHERE session_id = ? AND set_number = 1`, sessionID).Scan(&firstExercise)
+	err := app.db.QueryRow(`SELECT exercise_name FROM exercise_sets WHERE session_id = ? AND set_number = 1`, sessionID).Scan(&firstExercise)
 	if err != nil {
 		t.Fatalf("query first exercise after reorder: %v", err)
 	}
@@ -1359,7 +1357,7 @@ func TestDeleteExerciseBlockRemovesOnlySelectedBlock(t *testing.T) {
 	resp.Body.Close()
 
 	var totalSets int
-	err := app.db.Conn().QueryRow(`SELECT COUNT(1) FROM exercise_sets WHERE session_id = ?`, sessionID).Scan(&totalSets)
+	err := app.db.QueryRow(`SELECT COUNT(1) FROM exercise_sets WHERE session_id = ?`, sessionID).Scan(&totalSets)
 	if err != nil {
 		t.Fatalf("count sets after delete: %v", err)
 	}
@@ -1398,7 +1396,7 @@ func TestFinishAllOpenWorkouts(t *testing.T) {
 	resp.Body.Close()
 
 	var openCount int
-	err := app.db.Conn().QueryRow(`SELECT COUNT(1) FROM workout_sessions WHERE finished_at IS NULL`).Scan(&openCount)
+	err := app.db.QueryRow(`SELECT COUNT(1) FROM workout_sessions WHERE finished_at IS NULL`).Scan(&openCount)
 	if err != nil {
 		t.Fatalf("count open sessions after finish-open: %v", err)
 	}
@@ -1475,7 +1473,7 @@ func TestDeleteSetRemovesOnlyRequestedSet(t *testing.T) {
 	resp.Body.Close()
 
 	var totalSets int
-	err := app.db.Conn().QueryRow(`SELECT COUNT(1) FROM exercise_sets WHERE session_id = ?`, sessionID).Scan(&totalSets)
+	err := app.db.QueryRow(`SELECT COUNT(1) FROM exercise_sets WHERE session_id = ?`, sessionID).Scan(&totalSets)
 	if err != nil {
 		t.Fatalf("count sets after delete set: %v", err)
 	}
@@ -1484,7 +1482,7 @@ func TestDeleteSetRemovesOnlyRequestedSet(t *testing.T) {
 	}
 
 	var deletedCount int
-	err = app.db.Conn().QueryRow(`SELECT COUNT(1) FROM exercise_sets WHERE session_id = ? AND set_number = 3`, sessionID).Scan(&deletedCount)
+	err = app.db.QueryRow(`SELECT COUNT(1) FROM exercise_sets WHERE session_id = ? AND set_number = 3`, sessionID).Scan(&deletedCount)
 	if err != nil {
 		t.Fatalf("count deleted set number: %v", err)
 	}
@@ -1532,7 +1530,7 @@ func TestSkipNextIncrementPreventsOneIncrease(t *testing.T) {
 	resp.Body.Close()
 
 	var squatWeight float64
-	err := app.db.Conn().QueryRow(`SELECT current_weight FROM lift_progress WHERE exercise_name = 'Squat'`).Scan(&squatWeight)
+	err := app.db.QueryRow(`SELECT current_weight FROM lift_progress WHERE exercise_name = 'Squat'`).Scan(&squatWeight)
 	if err != nil {
 		t.Fatalf("query squat progress: %v", err)
 	}
@@ -1554,7 +1552,7 @@ func TestManualDeloadLowersWeight(t *testing.T) {
 	resp.Body.Close()
 
 	var squatWeight float64
-	err := app.db.Conn().QueryRow(`SELECT current_weight FROM lift_progress WHERE exercise_name = 'Squat'`).Scan(&squatWeight)
+	err := app.db.QueryRow(`SELECT current_weight FROM lift_progress WHERE exercise_name = 'Squat'`).Scan(&squatWeight)
 	if err != nil {
 		t.Fatalf("query squat after deload: %v", err)
 	}
@@ -1592,10 +1590,10 @@ func TestBackupExportAndImportRoundTrip(t *testing.T) {
 		t.Fatalf("expected backup payload to contain sessions key")
 	}
 
-	if _, err := app.db.Conn().Exec(`DELETE FROM exercise_sets`); err != nil {
+	if _, err := app.db.Exec(`DELETE FROM exercise_sets`); err != nil {
 		t.Fatalf("delete exercise_sets before import: %v", err)
 	}
-	if _, err := app.db.Conn().Exec(`DELETE FROM workout_sessions`); err != nil {
+	if _, err := app.db.Exec(`DELETE FROM workout_sessions`); err != nil {
 		t.Fatalf("delete workout_sessions before import: %v", err)
 	}
 
@@ -1607,7 +1605,7 @@ func TestBackupExportAndImportRoundTrip(t *testing.T) {
 	resp.Body.Close()
 
 	var restoredSets int
-	err := app.db.Conn().QueryRow(`SELECT COUNT(1) FROM exercise_sets`).Scan(&restoredSets)
+	err := app.db.QueryRow(`SELECT COUNT(1) FROM exercise_sets`).Scan(&restoredSets)
 	if err != nil {
 		t.Fatalf("count restored sets after backup import: %v", err)
 	}
