@@ -157,14 +157,28 @@
 <div class="card" style="border-color:#ef444477;">
   <div class="card-title" style="margin-bottom:.5rem;color:#ef4444;">Danger Zone</div>
   <div class="card-subtitle" style="margin-bottom:1rem;">Soft-delete your account and log out immediately.</div>
-  <form method="POST" action="/account/delete" style="margin:0;">
+  <form method="POST" action="/account/delete" style="margin:0;" id="delete-account-form">
     <button
       class="btn btn-danger"
-      type="submit"
-      onclick="return confirm('Delete your account? This is a soft delete and will disable login.');">
+      type="button"
+      id="delete-account-btn">
       Delete Account
     </button>
   </form>
+  {{block "scripts" .}}{{end}}
+  <script>
+    (function() {
+      var btn  = document.getElementById('delete-account-btn');
+      var form = document.getElementById('delete-account-form');
+      if (btn && form) {
+        btn.addEventListener('click', function() {
+          smoltConfirm('Delete account', 'This will disable login. Continue?', 'Delete').then(function(ok) {
+            if (ok) form.submit();
+          });
+        });
+      }
+    })();
+  </script>
 </div>
 {{end}}
 

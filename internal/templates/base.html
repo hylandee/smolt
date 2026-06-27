@@ -393,6 +393,64 @@
     .timer-bar-wrap { width: 160px; height: 5px; background: var(--border); border-radius: 3px; }
     .timer-bar { height: 100%; background: var(--accent); border-radius: 3px; transition: width .5s linear; }
 
+    /* ---- Toast notifications ---- */
+    #smolt-toast-stack {
+      position: fixed;
+      bottom: 1.25rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 9999;
+      display: flex;
+      flex-direction: column-reverse;
+      gap: .5rem;
+      align-items: center;
+      pointer-events: none;
+      width: min(92vw, 380px);
+    }
+    .smolt-toast {
+      pointer-events: auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--red);
+      border-radius: var(--radius);
+      box-shadow: 0 4px 16px rgba(0,0,0,.18);
+      padding: .65rem 1rem;
+      font-size: .9rem;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      width: 100%;
+      animation: toast-in .22s ease;
+    }
+    .smolt-toast.toast-success { border-left-color: var(--green); }
+    .smolt-toast-msg { flex: 1; }
+    .smolt-toast-close { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 1rem; line-height: 1; padding: 0 .15rem; }
+    .smolt-toast-close:hover { color: var(--text); }
+    @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+    /* ---- Confirm modal ---- */
+    #smolt-confirm-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.45);
+      z-index: 10000;
+      display: flex; align-items: center; justify-content: center;
+      padding: 1rem;
+    }
+    #smolt-confirm-backdrop[hidden] { display: none; }
+    #smolt-confirm-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: 0 8px 32px rgba(0,0,0,.25);
+      padding: 1.5rem;
+      width: min(92vw, 360px);
+      display: flex; flex-direction: column; gap: 1rem;
+    }
+    #smolt-confirm-title { font-weight: 700; font-size: 1rem; }
+    #smolt-confirm-msg { font-size: .9rem; color: var(--muted); }
+    #smolt-confirm-actions { display: flex; gap: .6rem; justify-content: flex-end; }
+
     /* ---- HTMX loading indicator ---- */
     .htmx-indicator { opacity: 0; transition: opacity 0.2s; }
     .htmx-request .htmx-indicator { opacity: 1; }
@@ -588,6 +646,76 @@
           return defaultsForType(typeFromExerciseName(name), distanceUnit);
         },
         helperText: helperText
+      };
+    })();
+  </script>
+
+  <div id="smolt-toast-stack" aria-live="polite" aria-atomic="false"></div>
+
+  <div id="smolt-confirm-backdrop" hidden>
+    <div id="smolt-confirm-box" role="dialog" aria-modal="true">
+      <div id="smolt-confirm-title"></div>
+      <div id="smolt-confirm-msg"></div>
+      <div id="smolt-confirm-actions">
+        <button class="btn btn-ghost btn-sm" id="smolt-confirm-cancel">Cancel</button>
+        <button class="btn btn-danger btn-sm" id="smolt-confirm-ok">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      var stack = document.getElementById('smolt-toast-stack');
+
+      window.showToast = function(msg, type) {
+        if (!stack) return;
+        var toast = document.createElement('div');
+        toast.className = 'smolt-toast' + (type === 'success' ? ' toast-success' : '');
+        toast.innerHTML =
+          '<span class="smolt-toast-msg">' + msg + '</span>' +
+          '<button class="smolt-toast-close" aria-label="Dismiss">&times;</button>';
+        toast.querySelector('.smolt-toast-close').addEventListener('click', function() { dismiss(toast); });
+        stack.appendChild(toast);
+        setTimeout(function() { dismiss(toast); }, 4500);
+      };
+
+      function dismiss(toast) {
+        if (!toast.parentNode) return;
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(8px)';
+        toast.style.transition = 'opacity .18s, transform .18s';
+        setTimeout(function() { toast.parentNode && toast.parentNode.removeChild(toast); }, 200);
+      }
+
+      var backdrop = document.getElementById('smolt-confirm-backdrop');
+      var titleEl  = document.getElementById('smolt-confirm-title');
+      var msgEl    = document.getElementById('smolt-confirm-msg');
+      var okBtn    = document.getElementById('smolt-confirm-ok');
+      var cancelBtn = document.getElementById('smolt-confirm-cancel');
+      var pendingResolve = null;
+
+      function closeModal(result) {
+        if (backdrop) backdrop.hidden = true;
+        if (pendingResolve) { pendingResolve(result); pendingResolve = null; }
+      }
+
+      if (okBtn)     okBtn.addEventListener('click',     function() { closeModal(true); });
+      if (cancelBtn) cancelBtn.addEventListener('click', function() { closeModal(false); });
+      if (backdrop)  backdrop.addEventListener('click',  function(e) { if (e.target === backdrop) closeModal(false); });
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && backdrop && !backdrop.hidden) closeModal(false);
+      });
+
+      window.smoltConfirm = function(title, msg, okLabel) {
+        return new Promise(function(resolve) {
+          if (!backdrop) { resolve(true); return; }
+          if (titleEl) titleEl.textContent = title || '';
+          if (msgEl)   msgEl.textContent   = msg   || '';
+          if (okBtn)   okBtn.textContent   = okLabel || 'Confirm';
+          backdrop.hidden = false;
+          pendingResolve = resolve;
+          if (cancelBtn) cancelBtn.focus();
+        });
       };
     })();
   </script>

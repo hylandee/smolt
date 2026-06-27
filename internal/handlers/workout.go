@@ -396,6 +396,9 @@ func (h *WorkoutHandlers) parseStandaloneItems(w http.ResponseWriter, r *http.Re
 	times := r.Form["time_minutes"]
 	distances := r.Form["distance_miles"]
 
+	weightUnit, _ := h.weightUnitForUser(r, user.UserID)
+	maxWeight := maxWeightForUnit(weightUnit)
+
 	if len(types) == 0 {
 		h.renderStandaloneEditorError(w, r, user, existing, "Add at least one exercise.", formAction, submitLabel)
 		return nil, false
@@ -421,11 +424,11 @@ func (h *WorkoutHandlers) parseStandaloneItems(w http.ResponseWriter, r *http.Re
 			}
 			setCount := parsePositiveIntWithDefault(valueAt(sets, i), 5)
 			targetReps := parsePositiveIntWithDefault(valueAt(reps, i), 5)
-			weight := parseNonNegativeFloatWithDefault(valueAt(weights, i), 0)
+			weight := min(parseNonNegativeFloatWithDefault(valueAt(weights, i), 0), maxWeight)
 			if len(scheme) > 0 {
 				setCount = len(scheme)
 				targetReps = scheme[0].TargetReps
-				weight = scheme[0].Weight
+				weight = min(scheme[0].Weight, maxWeight)
 			}
 			items = append(items, workout.StandaloneItemInput{
 				ExerciseName: exerciseName,
@@ -1243,6 +1246,13 @@ func parseNonNegativeFloatWithDefault(s string, fallback float64) float64 {
 		return fallback
 	}
 	return v
+}
+
+func maxWeightForUnit(unit string) float64 {
+	if unit == "kg" {
+		return 220
+	}
+	return 500
 }
 
 func parsePositiveFloatWithDefault(s string, fallback float64) float64 {

@@ -1,5 +1,6 @@
 # Compiled binary (root level only)
 /stronglifts
+.claude
 
 # Build artifacts
 /target/

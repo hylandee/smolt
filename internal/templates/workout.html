@@ -6,22 +6,25 @@
 <style>
   .workout-timer {
     position: sticky;
-    top: 4.25rem;
-    width: 100%;
+    top: 4.75rem;
     z-index: 10;
-    padding: .6rem 1rem;
+    width: fit-content;
+    margin: .5rem auto 0;
+    padding: .4rem 1.1rem;
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: .75rem;
+    gap: .6rem;
     font-weight: 800;
-    border-bottom: 1px solid var(--border);
+    border-radius: 999px;
+    border: 1px solid rgba(0,0,0,.08);
+    box-shadow: 0 2px 8px rgba(0,0,0,.12);
   }
   .workout-timer-label { font-size: .85rem; opacity: .95; }
   .workout-timer-count { font-size: 1.2rem; letter-spacing: .03em; min-width: 5ch; text-align: center; }
-  .workout-timer.state-green { background: #22c55e; color: #06210f; }
-  .workout-timer.state-yellow { background: #facc15; color: #3a2c00; }
-  .workout-timer.state-red { background: #ef4444; color: #fff; }
+  .workout-timer.state-green { background: rgba(34,197,94,.55); color: #06210f; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  .workout-timer.state-yellow { background: rgba(250,204,21,.6); color: #3a2c00; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  .workout-timer.state-red { background: rgba(239,68,68,.7); color: #fff; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
   .workout-timer.flash { animation: timer-flash 1s ease-in-out infinite; }
   @keyframes timer-flash {
     0% { opacity: 1; }
@@ -197,19 +200,21 @@
   .plate[data-plate="45lb"] { background:#1565C0; height:64px; }
   .plate[data-plate="35lb"] { background:#F9A825; height:56px; }
   .plate[data-plate="25lb"] { background:#2E7D32; height:48px; }
-  .plate[data-plate="10lb"] { background:#E0E0E0; border:1px solid #999; height:38px; }
-  .plate[data-plate="5lb"]  { background:#C62828; height:30px; }
-  .plate[data-plate="2.5lb"]{ background:#212121; height:22px; }
+  .plate[data-plate="10lb"] { background:#E0E0E0; border:1px solid #999; height:38px; width:9px; }
+  .plate[data-plate="5lb"]  { background:#C62828; height:30px; width:7px; }
+  .plate[data-plate="2.5lb"]{ background:#212121; border:1px solid #555; height:22px; width:7px; }
   .plate[data-plate="25kg"] { background:#C62828; height:64px; }
   .plate[data-plate="20kg"] { background:#1565C0; height:56px; }
   .plate[data-plate="15kg"] { background:#F9A825; height:48px; }
-  .plate[data-plate="10kg"] { background:#2E7D32; height:38px; }
-  .plate[data-plate="5kg"]  { background:#E0E0E0; border:1px solid #999; height:30px; }
-  .plate[data-plate="2.5kg"]{ background:#212121; height:22px; }
-  .plate[data-plate="2kg"],.plate[data-plate="1.5kg"],.plate[data-plate="1kg"],.plate[data-plate="0.5kg"] { background:#757575; height:16px; }
-  .plate-summary { font-size:.8rem; color:var(--text-muted,#888); margin-top:.25rem; }
-  .set-row { display:grid; grid-template-columns: 58px 1fr 1fr auto; gap:.5rem; align-items:center; margin-bottom:.5rem; }
-  .set-row.cardio-row { grid-template-columns: 58px 1fr auto; align-items:start; }
+  .plate[data-plate="10kg"] { background:#2E7D32; height:38px; width:9px; }
+  .plate[data-plate="5kg"]  { background:#E0E0E0; border:1px solid #999; height:30px; width:7px; }
+  .plate[data-plate="2.5kg"]{ background:#212121; border:1px solid #555; height:22px; width:7px; }
+  .plate[data-plate="2kg"],.plate[data-plate="1.5kg"],.plate[data-plate="1kg"],.plate[data-plate="0.5kg"] { background:#757575; height:16px; width:5px; }
+  .plate-key { display:flex; flex-wrap:wrap; gap:6px; margin-top:.4rem; }
+  .plate-key-item { display:flex; align-items:center; gap:4px; font-size:.75rem; color:var(--text); }
+  .plate-key-swatch { width:10px; height:18px; border-radius:2px; flex-shrink:0; }
+  .set-row { display:grid; grid-template-columns: 1fr 1fr auto; gap:.5rem; align-items:center; margin-bottom:.5rem; }
+  .set-row.cardio-row { grid-template-columns: 1fr auto; align-items:start; }
   .set-delete-btn {
     border: 1px solid var(--border);
     background: var(--surface);
@@ -314,8 +319,7 @@
   }
   @media (max-width: 560px) {
     .workout-timer {
-      padding: .7rem .5rem;
-      justify-content: space-between;
+      padding: .4rem .9rem;
     }
     .set-row { grid-template-columns: 1fr 1fr auto; }
     .set-row .set-label { grid-column: 1 / span 3; }
@@ -381,7 +385,6 @@
     {{end}}
     {{range $exercise.Sets}}
       <div class="set-row{{if or (eq $exName "Treadmill") (eq $exName "Exercise Bike") (eq $exName "Staircase") (eq $exName "Elliptical")}} cardio-row{{end}}" data-set-row data-set-number="{{.Number}}" data-target="{{.TargetReps}}" data-completed="{{if .Completed}}true{{else}}false{{end}}">
-        <div class="set-label">Set {{.LocalNumber}}</div>
         {{if or (eq $exName "Treadmill") (eq $exName "Exercise Bike") (eq $exName "Staircase") (eq $exName "Elliptical")}}
         <div class="cardio-entry">
           <div class="cardio-entry-fields{{if or (eq $exName "Staircase") (eq $exName "Elliptical")}} single-metric{{end}}">
@@ -474,6 +477,7 @@
     var sessionID = {{.Session.ID}};
     var weightUnit = '{{.WeightUnit}}';
     var distanceUnit = '{{.DistanceUnit}}';
+    var MAX_WEIGHT = weightUnit === 'kg' ? 220 : 500;
     var timerEl = document.getElementById('workout-timer');
     var timerCountEl = document.getElementById('workout-timer-count');
     var secondsSinceComplete = 0;
@@ -597,11 +601,42 @@
       autosaveStatusEl.textContent = text;
     }
 
+    function calcPlatesPerSide(totalWeight, unit) {
+      var bar = unit === 'kg' ? 20 : 45;
+      var max = unit === 'kg' ? 220 : 500;
+      if (totalWeight > max) return [];
+      var perSide = (totalWeight - bar) / 2;
+      if (perSide <= 0.001) return [];
+      var available = unit === 'kg'
+        ? [25, 20, 15, 10, 5, 2.5, 2, 1.5, 1, 0.5]
+        : [45, 35, 25, 10, 5, 2.5];
+      var remaining = perSide;
+      var result = [];
+      for (var i = 0; i < available.length; i++) {
+        if (remaining < 0.01) break;
+        var plate = available[i];
+        var count = Math.floor(remaining / plate + 0.001);
+        if (count > 0) {
+          result.push({w: plate, n: count});
+          remaining -= count * plate;
+          if (remaining < 0.01) remaining = 0;
+        }
+      }
+      return result;
+    }
+
     function syncExerciseWeightLabel(card, value) {
       if (!card) return;
-      var weightLabel = card.querySelector('.workout-exercise-weight');
-      if (!weightLabel || value === '') return;
-      weightLabel.textContent = value + ' ' + weightUnit;
+      var btn = card.querySelector('.weight-tap');
+      if (!btn || value === '') return;
+      var w = parseFloat(value);
+      btn.textContent = value + ' ' + weightUnit;
+      if (!isNaN(w)) {
+        var plates = calcPlatesPerSide(w, weightUnit);
+        btn.dataset.plates = JSON.stringify(plates.map(function(p) { return {w: p.w, n: p.n}; }));
+        var pop = document.getElementById('plate-popover');
+        if (pop && !pop.hidden && pop._source === btn) renderPlateContent(btn);
+      }
     }
 
     function propagateExerciseWeightFromFirstRow(card, sourceInput) {
@@ -640,7 +675,7 @@
         if (row.getAttribute('data-completed') === 'true') completed += 1;
       });
       var allDone = rows.length > 0 && completed === rows.length;
-      if (status) status.textContent = allDone ? 'Done' : (completed + '/' + rows.length + ' complete');
+      if (status) status.textContent = allDone ? 'Done' : '';
       if (!allDone) {
         clearPendingCollapse(card);
       }
@@ -670,6 +705,8 @@
           weight = Number(weightInput.value);
           if (isCardioDistanceRow(row)) {
             weight = displayDistanceToMiles(weightInput.value);
+          } else {
+            weight = Math.min(weight, MAX_WEIGHT);
           }
         }
         payload.push({
@@ -683,14 +720,6 @@
     }
 
     function recalcCardSetLabels(card) {
-      if (!card) return;
-      var rows = card.querySelectorAll('[data-set-row]');
-      rows.forEach(function(row, idx) {
-        var label = row.querySelector('.set-label');
-        if (label) {
-          label.textContent = 'Set ' + String(idx + 1);
-        }
-      });
       updateExerciseCardState(card, false);
     }
 
@@ -893,6 +922,15 @@
       }
 
       row.querySelectorAll('[data-reps-input], [data-weight-input]').forEach(function(input) {
+        if (input.hasAttribute('data-weight-input') && !isCardioDistanceRow(row)) {
+          input.addEventListener('blur', function() {
+            var v = parseFloat(input.value);
+            if (!isNaN(v) && v > MAX_WEIGHT) {
+              input.value = String(MAX_WEIGHT);
+              syncExerciseWeightLabel(input.closest('[data-exercise-card]'), String(MAX_WEIGHT));
+            }
+          });
+        }
         input.addEventListener('input', function() {
           var card = input.closest('[data-exercise-card]');
           if (row.querySelector('[data-cardio-confirm]')) {
@@ -1042,7 +1080,7 @@
         .catch(function() {
           setAutosaveStatus('Autosave: failed');
           if (showSavedState) {
-            alert('Failed to save workout state.');
+            showToast('Failed to save workout state.');
           }
         })
         .finally(function() {
@@ -1209,7 +1247,7 @@
         upBtn.addEventListener('click', function(e) {
           e.stopPropagation();
           var index = getExerciseIndex(card);
-          reorderExercise(index, index - 1).catch(function() { alert('Failed to reorder exercise.'); });
+          reorderExercise(index, index - 1).catch(function() { showToast('Failed to reorder exercise.'); });
         });
       }
 
@@ -1217,7 +1255,7 @@
         downBtn.addEventListener('click', function(e) {
           e.stopPropagation();
           var index = getExerciseIndex(card);
-          reorderExercise(index, index + 1).catch(function() { alert('Failed to reorder exercise.'); });
+          reorderExercise(index, index + 1).catch(function() { showToast('Failed to reorder exercise.'); });
         });
       }
 
@@ -1417,7 +1455,7 @@
         if (!draggingCard || draggingCard === card) return;
         var fromIndex = Number(draggingCard.getAttribute('data-exercise-index'));
         var toIndex = Number(card.getAttribute('data-exercise-index'));
-        reorderExercise(fromIndex, toIndex).catch(function() { alert('Failed to reorder exercise.'); });
+        reorderExercise(fromIndex, toIndex).catch(function() { showToast('Failed to reorder exercise.'); });
       });
 
       card.addEventListener('dragend', function() {
@@ -1469,7 +1507,7 @@
 
         if (!fromIndex || !targetIndex || fromIndex === toIndex) return;
         reorderExercise(fromIndex, toIndex).catch(function() {
-          alert('Failed to reorder exercise.');
+          showToast('Failed to reorder exercise.');
         });
       }, { passive: true });
 
@@ -1510,19 +1548,22 @@
           autosaveTimer = null;
         }
         var sets = collectSets();
-        if (hasIncomplete(sets) && !confirm('Workout has incomplete sets. Complete anyway? Incomplete A/B workouts will not advance progression.')) {
-          return;
-        }
-        postJSON('/workout/' + sessionID + '/finish', { sets: sets })
-          .then(function(resp) {
-            if (!resp.ok) throw new Error('finish failed');
-            return resp.json();
-          })
-          .then(function(data) {
-            var finishedID = data && data.sessionId ? data.sessionId : sessionID;
-            window.location.href = '/workouts?finished=' + encodeURIComponent(String(finishedID));
-          })
-          .catch(function() { alert('Failed to complete workout.'); });
+        var proceed = hasIncomplete(sets)
+          ? smoltConfirm('Incomplete sets', 'Some sets are not marked complete. Finish anyway? Incomplete A/B workouts will not advance progression.', 'Finish anyway')
+          : Promise.resolve(true);
+        proceed.then(function(ok) {
+          if (!ok) return;
+          postJSON('/workout/' + sessionID + '/finish', { sets: sets })
+            .then(function(resp) {
+              if (!resp.ok) throw new Error('finish failed');
+              return resp.json();
+            })
+            .then(function(data) {
+              var finishedID = data && data.sessionId ? data.sessionId : sessionID;
+              window.location.href = '/workouts?finished=' + encodeURIComponent(String(finishedID));
+            })
+            .catch(function() { showToast('Failed to complete workout.'); });
+        });
       });
     }
 
@@ -1733,7 +1774,7 @@
           clearAddExerciseDraft();
           queueAutosave();
         }).catch(function() {
-          alert('Failed to add exercise.');
+          showToast('Failed to add exercise.');
         });
       });
     }
@@ -1752,6 +1793,42 @@
 
   // Plate calculator popover
   (function() {
+    function renderPlateContent(btn) {
+      var plates = JSON.parse(btn.dataset.plates || '[]');
+      var unit = btn.dataset.unit || 'lb';
+
+      var sleeve = '<div class="plate-sleeve"></div>';
+      var platesHtml = plates.map(function(p) {
+        return Array(p.n).fill('<div class="plate" data-plate="' + p.w + unit + '" title="' + p.w + unit + '"></div>').join('');
+      }).join('');
+      document.getElementById('plate-stack').innerHTML = sleeve + platesHtml;
+
+      var keyEl = document.getElementById('plate-summary');
+      if (plates.length) {
+        var plateColors = {
+          '45lb':'#1565C0','35lb':'#F9A825','25lb':'#2E7D32','10lb':'#E0E0E0',
+          '5lb':'#C62828','2.5lb':'#212121',
+          '25kg':'#C62828','20kg':'#1565C0','15kg':'#F9A825','10kg':'#2E7D32',
+          '5kg':'#E0E0E0','2.5kg':'#212121','2kg':'#757575','1.5kg':'#757575',
+          '1kg':'#757575','0.5kg':'#757575'
+        };
+        var items = plates.map(function(p) {
+          var key = p.w + unit;
+          var color = plateColors[key] || '#888';
+          var border = (color === '#E0E0E0' || color === '#212121') ? ';border:1px solid #999' : '';
+          return '<span class="plate-key-item">' +
+            '<span class="plate-key-swatch" style="background:' + color + border + '"></span>' +
+            (p.n === 1 ? p.w : p.n + '×' + p.w) +
+            '</span>';
+        });
+        keyEl.className = 'plate-key';
+        keyEl.innerHTML = items.join('');
+      } else {
+        keyEl.className = 'plate-summary';
+        keyEl.textContent = 'Just the bar';
+      }
+    }
+
     function showPlatePopover(btn, e) {
       e.stopPropagation();
       var pop = document.getElementById('plate-popover');
@@ -1760,23 +1837,8 @@
         hidePlatePopover(); return;
       }
       pop._source = btn;
+      renderPlateContent(btn);
 
-      var plates = JSON.parse(btn.dataset.plates || '[]');
-      var unit = btn.dataset.unit || 'lb';
-
-      var sleeve = '<div class="plate-sleeve"></div>';
-      var platesHtml = plates.map(function(p) {
-        return Array(p.n).fill('<div class="plate" data-plate="' + p.w + unit + '" title="' + p.w + unit + '"></div>').join('');
-      }).join('');
-
-      var summary = plates.length
-        ? plates.map(function(p) { return p.n + '×' + p.w; }).join(' + ') + ' ' + unit + ' per side'
-        : 'Just the bar';
-
-      document.getElementById('plate-stack').innerHTML = sleeve + platesHtml;
-      document.getElementById('plate-summary').textContent = summary;
-
-      // Position below button, clamped to viewport
       var rect = btn.getBoundingClientRect();
       var top = rect.bottom + window.scrollY + 8;
       var left = rect.left + window.scrollX - 60;

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -449,6 +450,11 @@ func (h *AuthHandlers) Onboarding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	weightCap := 500.0
+	if r.FormValue("unit_pref") == auth.UnitPrefMetric {
+		weightCap = 220.0
+	}
+
 	squat, err := parseWeight(r.FormValue("squat"), workout.Squat.DefaultStartWeight)
 	if err != nil {
 		render("Please enter valid positive starting weights")
@@ -472,6 +478,10 @@ func (h *AuthHandlers) Onboarding(w http.ResponseWriter, r *http.Request) {
 	deadlift, err := parseWeight(r.FormValue("deadlift"), workout.Deadlift.DefaultStartWeight)
 	if err != nil {
 		render("Please enter valid positive starting weights")
+		return
+	}
+	if squat > weightCap || bench > weightCap || row > weightCap || press > weightCap || deadlift > weightCap {
+		render(fmt.Sprintf("Starting weights cannot exceed %.0f %s", weightCap, map[bool]string{true: "kg", false: "lb"}[weightCap == 220]))
 		return
 	}
 

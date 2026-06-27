@@ -236,6 +236,7 @@
 
     var weightUnit = '{{.WeightUnit}}' || 'lb';
     var distanceUnit = '{{.DistanceUnit}}' || 'mi';
+    var MAX_WEIGHT = weightUnit === 'kg' ? 220 : 500;
     var initialWorkout = {{if .ExistingWorkoutJSON}}{{.ExistingWorkoutJSON}}{{else}}null{{end}};
     var cardioTypes = ['treadmill', 'staircase', 'bike', 'elliptical'];
     var strengthOptions = ['Squat', 'Bench Press', 'Deadlift', 'Barbell Row', 'OHP'];
@@ -284,7 +285,9 @@
         btn.addEventListener('click', function() {
           var step = parseFloat(btn.getAttribute('data-step'));
           var val = parseFloat(input.value) || 0;
+          var isWeightStepper = groupEl.classList.contains('stepper-weight');
           var newVal = Math.max(0, Math.round((val + step) * 100) / 100);
+          if (isWeightStepper) newVal = Math.min(newVal, MAX_WEIGHT);
           input.value = String(newVal);
           onInput && onInput(newVal);
         });
