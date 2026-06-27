@@ -9,11 +9,11 @@ type Exercise struct {
 
 // Standard SL5x5 exercises
 var (
-	Squat      = Exercise{Name: "Squat", DefaultStartWeight: 195.0, IncrementBy: 2.5}
-	BenchPress = Exercise{Name: "Bench Press", DefaultStartWeight: 135.0, IncrementBy: 2.5}
-	BarbellRow = Exercise{Name: "Barbell Row", DefaultStartWeight: 95.0, IncrementBy: 2.5}
-	OHP        = Exercise{Name: "OHP", DefaultStartWeight: 95.0, IncrementBy: 2.5}
-	Deadlift   = Exercise{Name: "Deadlift", DefaultStartWeight: 225.0, IncrementBy: 2.5}
+	Squat      = Exercise{Name: "Squat", DefaultStartWeight: 45.0, IncrementBy: 2.5}
+	BenchPress = Exercise{Name: "Bench Press", DefaultStartWeight: 45.0, IncrementBy: 2.5}
+	BarbellRow = Exercise{Name: "Barbell Row", DefaultStartWeight: 65.0, IncrementBy: 2.5}
+	OHP        = Exercise{Name: "OHP", DefaultStartWeight: 45.0, IncrementBy: 2.5}
+	Deadlift   = Exercise{Name: "Deadlift", DefaultStartWeight: 95.0, IncrementBy: 5.0}
 )
 
 func AllExercises() []Exercise {

@@ -123,7 +123,7 @@ func (a *AuthService) RegisterUser(ctx context.Context, username, password strin
 	// Insert user
 	result, err := a.db.ExecContext(
 		ctx,
-		"INSERT INTO users (username, password_hash) VALUES (?, ?)",
+		"INSERT INTO users (username, password_hash, rest_timer) VALUES (?, ?, 180)",
 		username,
 		string(hash),
 	)
