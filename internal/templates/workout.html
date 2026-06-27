@@ -480,7 +480,6 @@
     var MAX_WEIGHT = weightUnit === 'kg' ? 220 : 500;
     var timerEl = document.getElementById('workout-timer');
     var timerCountEl = document.getElementById('workout-timer-count');
-    var secondsSinceComplete = 0;
     var lastCompletionTimestamp = null;
     var timerInterval = null;
     var pendingCollapseTimers = {};
@@ -491,13 +490,7 @@
     var autosaveStatusEl = document.getElementById('autosave-status');
     var pendingSetDeletes = {};
     var pendingExerciseDeletes = new WeakMap();
-    var saved = localStorage.getItem(
-      'lastCompletionTimestamp'
-    );
-    paintTimer();
-    startTimer();
-
-
+    var saved = localStorage.getItem('lastCompletionTimestamp');
     if (saved) {
       lastCompletionTimestamp = Number(saved);
     }
@@ -561,24 +554,20 @@
       }
     }
     function startTimer() {
-      if (timerInterval) {
-        clearInterval(timerInterval);
-      }
+      if (timerInterval) clearInterval(timerInterval);
       timerInterval = setInterval(function() {
         paintTimer();
+        if (calculateSecondsSinceComplete() >= 600) {
+          clearInterval(timerInterval);
+          timerInterval = null;
+        }
       }, 1000);
-
       paintTimer();
     }
     function resetTimer() {
       lastCompletionTimestamp = Date.now();
-
-      localStorage.setItem(
-        'lastCompletionTimestamp',
-        String(lastCompletionTimestamp)
-      );
-
-      paintTimer();
+      localStorage.setItem('lastCompletionTimestamp', String(lastCompletionTimestamp));
+      startTimer();
     }
 
     function clearPendingCollapse(card) {
