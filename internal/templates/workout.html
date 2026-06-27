@@ -360,14 +360,25 @@
 
 {{if not .HasTodayWeight}}
 <div id="body-weight-card" class="card" style="padding:.6rem .9rem;">
-  <form hx-post="/body-weight" hx-target="#body-weight-card" hx-swap="outerHTML" style="display:flex;align-items:center;gap:.5rem;">
+  <form id="bw-log-form-workout" style="display:flex;align-items:center;gap:.5rem;">
     <span style="color:var(--muted);font-size:.85rem;flex-shrink:0;">Body weight</span>
-    <input type="number" name="weight" step="0.1" min="1" placeholder="0.0"
+    <input type="number" name="weight" step="0.1" min="1" max="{{if eq .WeightUnit "kg"}}220{{else}}500{{end}}" placeholder="0.0"
       style="width:80px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:.4rem .6rem;font-size:.95rem;">
     <span style="color:var(--muted);font-size:.85rem;">{{.WeightUnit}}</span>
     <button class="btn btn-primary btn-sm" type="submit">Log</button>
   </form>
 </div>
+<script>
+(function(){
+  var form = document.getElementById('bw-log-form-workout');
+  if (!form) return;
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    fetch('/body-weight', {method:'POST', body: new URLSearchParams(new FormData(form)), headers:{'Content-Type':'application/x-www-form-urlencoded'}})
+      .then(function(r){ if (r.ok) document.getElementById('body-weight-card').remove(); });
+  });
+})();
+</script>
 {{end}}
 
 <div id="tracking-root">

@@ -1228,15 +1228,19 @@ func (h *WorkoutHandlers) LogBodyWeight(w http.ResponseWriter, r *http.Request) 
 		httpError(w, err, "Failed to parse form", http.StatusBadRequest)
 		return
 	}
-	raw := strings.TrimSpace(r.FormValue("weight"))
-	val, err := strconv.ParseFloat(raw, 64)
-	if err != nil || val <= 0 || val > 500 {
-		httpError(w, fmt.Errorf("invalid weight: %q", raw), "Invalid weight value", http.StatusBadRequest)
-		return
-	}
 	unitPref, err := h.authService.GetUnitPref(r.Context(), user.UserID)
 	if err != nil {
 		httpError(w, err, "Failed to load unit preference", http.StatusInternalServerError)
+		return
+	}
+	cap := 500.0
+	if unitPref == auth.UnitPrefMetric {
+		cap = 220.0
+	}
+	raw := strings.TrimSpace(r.FormValue("weight"))
+	val, err := strconv.ParseFloat(raw, 64)
+	if err != nil || val <= 0 || val > cap {
+		httpError(w, fmt.Errorf("invalid weight: %q", raw), "Invalid weight value", http.StatusBadRequest)
 		return
 	}
 	weightKg := val
@@ -1248,7 +1252,7 @@ func (h *WorkoutHandlers) LogBodyWeight(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if isHTMX(r) {
-		w.WriteHeader(http.StatusNoContent)
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 	http.Redirect(w, r, "/workouts", http.StatusSeeOther)
