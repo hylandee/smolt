@@ -481,6 +481,7 @@
     var timerEl = document.getElementById('workout-timer');
     var timerCountEl = document.getElementById('workout-timer-count');
     var secondsSinceComplete = 0;
+    var lastCompletionTimestamp = null;
     var timerInterval = null;
     var pendingCollapseTimers = {};
     var autosaveTimer = null;
@@ -490,6 +491,26 @@
     var autosaveStatusEl = document.getElementById('autosave-status');
     var pendingSetDeletes = {};
     var pendingExerciseDeletes = new WeakMap();
+    var saved = localStorage.getItem(
+      'lastCompletionTimestamp'
+    );
+    paintTimer();
+    startTimer();
+
+
+    if (saved) {
+      lastCompletionTimestamp = Number(saved);
+    }
+
+    function calculateSecondsSinceComplete() {
+      if (!lastCompletionTimestamp) {
+        return 0;
+      }
+
+      return Math.floor(
+        (Date.now() - lastCompletionTimestamp) / 1000
+      );
+    }
 
     function milesToDisplayDistance(miles) {
       var v = Number(miles) || 0;
@@ -516,12 +537,21 @@
       var secs = total % 60;
       return String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
     }
-
     function paintTimer() {
       if (!timerEl || !timerCountEl) return;
-      var shownSeconds = Math.min(secondsSinceComplete, 600);
+
+      var elapsed = calculateSecondsSinceComplete();
+      var shownSeconds = Math.min(elapsed, 600);
+
       timerCountEl.textContent = formatSeconds(shownSeconds);
-      timerEl.classList.remove('state-green', 'state-yellow', 'state-red', 'flash');
+
+      timerEl.classList.remove(
+        'state-green',
+        'state-yellow',
+        'state-red',
+        'flash'
+      );
+
       if (shownSeconds <= 150) {
         timerEl.classList.add('state-green');
       } else if (shownSeconds <= 180) {
@@ -530,25 +560,24 @@
         timerEl.classList.add('state-red', 'flash');
       }
     }
-
     function startTimer() {
-      if (timerInterval) clearInterval(timerInterval);
+      if (timerInterval) {
+        clearInterval(timerInterval);
+      }
       timerInterval = setInterval(function() {
-        if (secondsSinceComplete >= 600) {
-          secondsSinceComplete = 600;
-          paintTimer();
-          clearInterval(timerInterval);
-          timerInterval = null;
-          return;
-        }
-        secondsSinceComplete += 1;
         paintTimer();
       }, 1000);
+
       paintTimer();
     }
-
     function resetTimer() {
-      secondsSinceComplete = 0;
+      lastCompletionTimestamp = Date.now();
+
+      localStorage.setItem(
+        'lastCompletionTimestamp',
+        String(lastCompletionTimestamp)
+      );
+
       paintTimer();
     }
 
