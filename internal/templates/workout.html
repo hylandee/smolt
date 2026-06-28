@@ -331,7 +331,7 @@
   }
 </style>
 
-<div id="workout-timer" class="workout-timer state-green" aria-live="polite">
+<div id="workout-timer" class="workout-timer state-green" aria-live="polite" style="visibility:hidden">
   <span class="workout-timer-label">Rest Timer</span>
   <span id="workout-timer-count" class="workout-timer-count">00:00</span>
 </div>
@@ -517,7 +517,13 @@
     var pendingExerciseDeletes = new WeakMap();
     var saved = localStorage.getItem('lastCompletionTimestamp');
     if (saved) {
-      lastCompletionTimestamp = Number(saved);
+      var savedTs = Number(saved);
+      if (Date.now() - savedTs < 600000) {
+        lastCompletionTimestamp = savedTs;
+        if (timerEl) timerEl.style.visibility = '';
+      } else {
+        localStorage.removeItem('lastCompletionTimestamp');
+      }
     }
 
     function calculateSecondsSinceComplete() {
@@ -592,6 +598,7 @@
     function resetTimer() {
       lastCompletionTimestamp = Date.now();
       localStorage.setItem('lastCompletionTimestamp', String(lastCompletionTimestamp));
+      if (timerEl) timerEl.style.visibility = '';
       startTimer();
     }
 

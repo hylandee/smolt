@@ -32,7 +32,7 @@ go test ./...
 ```
 PORT=3000
 DB_PATH=stronglifts.db
-SECURE_COOKIES=false
+SECURE_COOKIES=true   # set true when behind a TLS-terminating reverse proxy
 ```
 
 Migrations run automatically on startup via goose.
@@ -72,4 +72,23 @@ View logs:
 
 ```bash
 journalctl -u smolt -f
+```
+
+### Nginx (reverse proxy)
+
+The app runs on port 3000, behind nginx which terminates TLS. Key points:
+
+- `SECURE_COOKIES=true` must be set in the systemd service (`/etc/systemd/system/smolt.service`)
+- Port 80 redirects to HTTPS; `/.well-known/acme-challenge/` is served from the static root for certbot renewals
+- The default server block silently drops (`444`) requests for unmatched hostnames to suppress scanner noise
+- Certbot auto-renews via systemd timer; test with `certbot renew --dry-run`
+
+### Journal log size
+
+journald is capped at 200MB (`/etc/systemd/journald.conf`):
+
+```ini
+[Journal]
+SystemMaxUse=200M
+SystemKeepFree=1G
 ```
